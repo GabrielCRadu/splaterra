@@ -55,7 +55,7 @@
           <a class="job-row" href="/job.html?id=${job.id}">
             <div class="job-thumb">&#127916;</div>
             <div class="job-info">
-              <div class="job-name">${job.name}</div>
+              <div class="job-name">${escapeHtml(job.name)}</div>
               <div class="job-meta">${new Date(job.created_at).toLocaleString("ro-RO")}</div>
             </div>
             ${stagePill(stages)}

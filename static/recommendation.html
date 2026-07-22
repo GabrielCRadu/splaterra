@@ -27,7 +27,7 @@
           <div class="job-row">
             <div class="job-info">
               <div class="job-name">Verdict</div>
-              <div class="job-meta">${rec.verdict.reason}</div>
+              <div class="job-meta">${escapeHtml(rec.verdict.reason)}</div>
             </div>
             <span class="pill ${verdictClass}">${verdictLabel}</span>
           </div>

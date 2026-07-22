@@ -22,6 +22,12 @@ function jobIdFromQuery() {
   return new URLSearchParams(window.location.search).get("id");
 }
 
+function escapeHtml(value) {
+  const div = document.createElement("div");
+  div.textContent = String(value);
+  return div.innerHTML;
+}
+
 function pollStages(jobId, onUpdate, intervalMs) {
   intervalMs = intervalMs || 2000;
   let stopped = false;

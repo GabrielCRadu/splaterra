@@ -30,3 +30,13 @@ def test_run_with_new_store_swallows_exceptions(job_store):
         raise RuntimeError("boom")
 
     deps.run_with_new_store(failing_service, "some-job-id")  # must not raise
+
+
+def test_run_with_new_store_logs_swallowed_exception(job_store, caplog):
+    def failing_service(store, job_id):
+        raise RuntimeError("boom")
+
+    with caplog.at_level("ERROR"):
+        deps.run_with_new_store(failing_service, "some-job-id")
+
+    assert "boom" in caplog.text

@@ -36,7 +36,7 @@
       .map((s) => {
         const pillClass =
           s.status === "done" ? "pill-green" : s.status === "failed" ? "pill-orange" : "pill-gray";
-        const errorLine = s.error ? `<div class="job-meta">${s.error}</div>` : "";
+        const errorLine = s.error ? `<div class="job-meta">${escapeHtml(s.error)}</div>` : "";
         return `
           <div class="job-row">
             <div class="job-info">
@@ -96,9 +96,13 @@
   });
 
   refresh();
-  pollStages(jobId, (stages) => {
+  const stopPolling = pollStages(jobId, (stages) => {
     renderStages(stages);
     updateActions(stages);
+    const anyRunning = stages.some((s) => s.status === "running");
+    if (stages.length > 0 && !anyRunning) {
+      stopPolling();
+    }
   });
 </script>
 </body>

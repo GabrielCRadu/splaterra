@@ -20,3 +20,5 @@ Ca sa accesezi aplicatia de pe telefon, de oriunde, prin reteaua ta privata Tail
 2. Pe PC, afla adresa Tailscale a masinii: `tailscale ip -4` (sau din aplicatia Tailscale).
 3. Cu `python run.py` pornit (asculta pe `0.0.0.0`, deci e deja accesibil pe orice interfata, inclusiv cea Tailscale), deschide pe telefon, in aplicatia Tailscale activa: `http://<adresa-tailscale>:8000/`.
 4. Nu e nevoie de nicio configurare suplimentara in cod — Tailscale ruteaza direct catre portul pe care asculta serverul.
+
+**Atentie:** serverul asculta pe `0.0.0.0`, deci e accesibil oricui e pe aceeasi retea locala (WiFi), nu doar prin Tailscale — aplicatia nu are autentificare. Ruleaz-o doar pe retele de incredere (acasa, nu WiFi public).
