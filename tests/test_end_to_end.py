@@ -32,7 +32,7 @@ def test_full_ingest_and_extract_flow(client, tmp_path):
     ingest_response = client.post(
         f"/jobs/{job_id}/ingest/local", json={"source_path": str(video_path)}
     )
-    assert ingest_response.status_code == 200
+    assert ingest_response.status_code == 202
 
     extract_response = client.post(
         f"/jobs/{job_id}/extract-frames",

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from app.deps import get_job_store
-from app.ingestion import IngestionError, import_local_file
+from app.deps import get_job_store, run_with_new_store
+from app.ingestion import import_local_file
 from app.job_store import JobStore
 from app.uploads import UploadError, complete_upload, received_chunks, save_chunk, start_upload
 
@@ -22,19 +22,17 @@ class StartUploadRequest(BaseModel):
     total_chunks: int
 
 
-@router.post("/{job_id}/ingest/local")
+@router.post("/{job_id}/ingest/local", status_code=202)
 def ingest_local(
     job_id: str,
     body: LocalImportRequest,
+    background_tasks: BackgroundTasks,
     store: JobStore = Depends(get_job_store),
 ) -> dict[str, str]:
     if store.get_job(job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    try:
-        destination = import_local_file(store, job_id, Path(body.source_path))
-    except IngestionError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"raw_video_path": str(destination)}
+    background_tasks.add_task(run_with_new_store, import_local_file, job_id, Path(body.source_path))
+    return {"status": "started"}
 
 
 @router.post("/{job_id}/uploads")
@@ -68,14 +66,14 @@ def list_received_chunks(job_id: str, upload_id: str) -> dict[str, list[int]]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.post("/{job_id}/uploads/{upload_id}/complete")
+@router.post("/{job_id}/uploads/{upload_id}/complete", status_code=202)
 def finish_upload(
-    job_id: str, upload_id: str, store: JobStore = Depends(get_job_store)
+    job_id: str,
+    upload_id: str,
+    background_tasks: BackgroundTasks,
+    store: JobStore = Depends(get_job_store),
 ) -> dict[str, str]:
     if store.get_job(job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    try:
-        destination = complete_upload(store, job_id, upload_id)
-    except UploadError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"raw_video_path": str(destination)}
+    background_tasks.add_task(run_with_new_store, complete_upload, job_id, upload_id)
+    return {"status": "started"}
