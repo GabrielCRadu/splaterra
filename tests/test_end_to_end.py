@@ -38,8 +38,8 @@ def test_full_ingest_and_extract_flow(client, tmp_path):
         f"/jobs/{job_id}/extract-frames",
         json={"selection_method": "batched", "fps": 5},
     )
-    assert extract_response.status_code == 200
-    assert extract_response.json()["frame_count"] > 0
+    assert extract_response.status_code == 202
+    assert extract_response.json() == {"status": "started"}
 
     job = client.get(f"/jobs/{job_id}").json()
     assert job["frame_count"] > 0
