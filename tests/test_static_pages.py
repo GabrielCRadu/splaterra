@@ -19,3 +19,9 @@ def test_job_page_contains_stage_list_and_action_buttons(client):
     assert 'id="stage-list"' in response.text
     assert 'id="btn-extract"' in response.text
     assert 'id="btn-recommend"' in response.text
+
+
+def test_frames_page_contains_frame_grid(client):
+    response = client.get("/frames.html")
+    assert response.status_code == 200
+    assert 'id="frame-grid"' in response.text

@@ -23,3 +23,66 @@ def test_extract_frames_endpoint_returns_202_and_invokes_extraction(client, monk
 def test_extract_frames_endpoint_unknown_job_returns_404(client):
     response = client.post("/jobs/does-not-exist/extract-frames", json={})
     assert response.status_code == 404
+
+
+def test_list_frames_returns_empty_when_not_extracted_yet(client):
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+    response = client.get(f"/jobs/{job_id}/frames")
+    assert response.status_code == 200
+    assert response.json() == {"frames": []}
+
+
+def test_list_frames_unknown_job_returns_404(client):
+    response = client.get("/jobs/does-not-exist/frames")
+    assert response.status_code == 404
+
+
+def test_list_frames_returns_filenames_from_frames_dir(client):
+    from app import db
+    from app.job_store import JobStore
+    from app.paths import frames_dir
+
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+
+    conn = db.connect()
+    directory = frames_dir(job_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "0001.jpg").write_bytes(b"fake")
+    (directory / "0002.jpg").write_bytes(b"fake")
+    JobStore(conn).update_job(job_id, frames_dir=str(directory))
+    conn.close()
+
+    response = client.get(f"/jobs/{job_id}/frames")
+    assert response.status_code == 200
+    assert response.json() == {"frames": ["0001.jpg", "0002.jpg"]}
+
+
+def test_get_frame_returns_file_content(client):
+    from app import db
+    from app.job_store import JobStore
+    from app.paths import frames_dir
+
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+
+    conn = db.connect()
+    directory = frames_dir(job_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "0001.jpg").write_bytes(b"fake-jpeg-bytes")
+    JobStore(conn).update_job(job_id, frames_dir=str(directory))
+    conn.close()
+
+    response = client.get(f"/jobs/{job_id}/frames/0001.jpg")
+    assert response.status_code == 200
+    assert response.content == b"fake-jpeg-bytes"
+
+
+def test_get_frame_unknown_file_returns_404(client):
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+    response = client.get(f"/jobs/{job_id}/frames/does-not-exist.jpg")
+    assert response.status_code == 404
+
+
+def test_get_frame_rejects_path_traversal(client):
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+    response = client.get(f"/jobs/{job_id}/frames/..%2F..%2Fapp%2Fmain.py")
+    assert response.status_code in (400, 404)
