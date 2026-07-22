@@ -42,3 +42,20 @@ def test_update_job_sets_recommendation_json(job_store):
     job_store.update_job(job.id, recommendation_json='{"verdict": {"use_cloud": false}}')
     fetched = job_store.get_job(job.id)
     assert fetched.recommendation_json == '{"verdict": {"use_cloud": false}}'
+
+
+def test_list_stages_returns_all_stages_for_job(job_store):
+    job = job_store.create_job("Test")
+    job_store.upsert_stage(job.id, "ingestion", "done", started_at="t0", finished_at="t1")
+    job_store.upsert_stage(job.id, "frame_extraction", "running", started_at="t2")
+
+    stages = job_store.list_stages(job.id)
+
+    assert {s.stage for s in stages} == {"ingestion", "frame_extraction"}
+    ingestion_stage = next(s for s in stages if s.stage == "ingestion")
+    assert ingestion_stage.status == "done"
+
+
+def test_list_stages_empty_for_job_with_no_stages(job_store):
+    job = job_store.create_job("Test")
+    assert job_store.list_stages(job.id) == []

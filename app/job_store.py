@@ -76,6 +76,12 @@ class JobStore:
         ).fetchone()
         return self._row_to_stage(row) if row else None
 
+    def list_stages(self, job_id: str) -> list[JobStage]:
+        rows = self._conn.execute(
+            "SELECT * FROM job_stages WHERE job_id = ? ORDER BY id", (job_id,)
+        ).fetchall()
+        return [self._row_to_stage(row) for row in rows]
+
     @staticmethod
     def _row_to_job(row: sqlite3.Row) -> Job:
         return Job(
