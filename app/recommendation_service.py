@@ -5,11 +5,11 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from app.drone_telemetry import SrtParseError, parse_srt
+from app.drone_telemetry import parse_srt
 from app.hardware import detect_hardware
 from app.job_store import JobStore
 from app.recommendation import Recommendation, recommend
-from app.video_metadata import VideoMetadataError, probe_video
+from app.video_metadata import probe_video
 
 
 class RecommendationError(Exception):
@@ -43,7 +43,7 @@ def compute_recommendation(
         drone = parse_srt(srt_path) if srt_path is not None else None
         hardware = detect_hardware()
         recommendation = recommend(video_meta, drone, hardware)
-    except (VideoMetadataError, SrtParseError) as exc:
+    except Exception as exc:
         store.upsert_stage(job_id, "recommendation", "failed", finished_at=_now(), error=str(exc))
         raise RecommendationError(str(exc)) from exc
 

@@ -85,6 +85,26 @@ def test_compute_recommendation_marks_stage_failed_on_video_metadata_error(
     assert stage.error == "ffprobe not found on PATH"
 
 
+def test_compute_recommendation_marks_stage_failed_on_untyped_error(
+    job_store, tmp_path, monkeypatch
+):
+    job = job_store.create_job("Test")
+    job_store.update_job(job.id, raw_video_path=str(tmp_path / "video.mp4"))
+
+    monkeypatch.setattr(
+        recommendation_service,
+        "probe_video",
+        MagicMock(side_effect=ValueError("could not convert string to float: 'N/A'")),
+    )
+
+    with pytest.raises(recommendation_service.RecommendationError, match="could not convert"):
+        recommendation_service.compute_recommendation(job_store, job.id)
+
+    stage = job_store.get_stage(job.id, "recommendation")
+    assert stage.status == "failed"
+    assert stage.error == "could not convert string to float: 'N/A'"
+
+
 def test_compute_recommendation_marks_stage_failed_on_srt_parse_error(
     job_store, tmp_path, monkeypatch
 ):
