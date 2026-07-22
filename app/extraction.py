@@ -26,6 +26,9 @@ def extract_frames(
 ) -> int:
     job = store.get_job(job_id)
     if job is None:
+        # No stage write here: job_stages.job_id has a foreign-key reference to
+        # jobs.id (PRAGMA foreign_keys = ON in app/db.py), so there is no row to
+        # attach a stage to for a job_id that doesn't exist.
         raise ExtractionError(f"Unknown job: {job_id}")
     if job.raw_video_path is None:
         now = _now()
