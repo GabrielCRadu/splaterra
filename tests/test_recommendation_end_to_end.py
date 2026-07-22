@@ -34,15 +34,12 @@ def test_full_ingest_and_recommend_flow(client, tmp_path):
     assert ingest_response.status_code == 202
 
     recommend_response = client.post(f"/jobs/{job_id}/recommend", json={})
-    assert recommend_response.status_code == 200
-
-    body = recommend_response.json()
-    assert body["realityscan"]["downscale"] in (1, 2)
-    assert isinstance(body["verdict"]["use_cloud"], bool)
-    assert isinstance(body["verdict"]["reason"], str) and body["verdict"]["reason"]
+    assert recommend_response.status_code == 202
 
     stored = client.get(f"/jobs/{job_id}/recommendation").json()
-    assert stored == body
+    assert stored["realityscan"]["downscale"] in (1, 2)
+    assert isinstance(stored["verdict"]["use_cloud"], bool)
+    assert isinstance(stored["verdict"]["reason"], str) and stored["verdict"]["reason"]
 
 
 def test_hardware_endpoint_returns_real_detection(client):
