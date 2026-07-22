@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Alignment — Splat Prep</title>
+<link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+<h1>Alignment</h1>
+<p class="subtitle" id="status">Se incarca...</p>
+
+<div id="content"></div>
+
+<script src="/js/app.js"></script>
+<script>
+  const jobId = jobIdFromQuery();
+
+  async function load() {
+    try {
+      const alignment = await apiGet(`/jobs/${jobId}/alignment`);
+      document.getElementById("status").textContent = "";
+      document.getElementById("content").innerHTML = `
+        <div class="card">
+          <div class="job-name" style="margin-bottom:8px;">Rezultat</div>
+          <div class="job-meta">Registration: ${escapeHtml(alignment.registration_path)}</div>
+          <div class="job-meta">Nor de puncte: ${escapeHtml(alignment.point_cloud_path)}</div>
+        </div>
+      `;
+    } catch (err) {
+      document.getElementById("status").textContent = "Alignment-ul nu a fost calculat inca.";
+    }
+  }
+
+  load();
+</script>
+</body>
+</html>

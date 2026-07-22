@@ -14,6 +14,8 @@
 
 <button class="btn" id="btn-extract" style="display:none;">Extrage cadre</button>
 <a class="btn-ghost" id="link-frames" style="display:none;">Revizuieste cadrele</a>
+<button class="btn" id="btn-align" style="display:none;">Porneste alignment</button>
+<a class="btn-ghost" id="link-alignment" style="display:none;">Vezi alignment</a>
 <button class="btn" id="btn-recommend" style="display:none;">Calculeaza recomandare</button>
 <a class="btn-ghost" id="link-recommendation" style="display:none;">Vezi recomandarea</a>
 
@@ -23,6 +25,7 @@
   const STAGE_LABELS = {
     ingestion: "Ingestie",
     frame_extraction: "Extragere cadre",
+    alignment: "Alignment",
     recommendation: "Recomandare",
   };
 
@@ -58,6 +61,7 @@
   function updateActions(stages) {
     const ingestionDone = stageStatus(stages, "ingestion") === "done";
     const extractionDone = stageStatus(stages, "frame_extraction") === "done";
+    const alignmentDone = stageStatus(stages, "alignment") === "done";
     const recommendationDone = stageStatus(stages, "recommendation") === "done";
 
     document.getElementById("btn-extract").style.display =
@@ -66,6 +70,13 @@
     const framesLink = document.getElementById("link-frames");
     framesLink.style.display = extractionDone ? "block" : "none";
     framesLink.href = `/frames.html?id=${jobId}`;
+
+    document.getElementById("btn-align").style.display =
+      extractionDone && !alignmentDone ? "block" : "none";
+
+    const alignmentLink = document.getElementById("link-alignment");
+    alignmentLink.style.display = alignmentDone ? "block" : "none";
+    alignmentLink.href = `/alignment.html?id=${jobId}`;
 
     document.getElementById("btn-recommend").style.display =
       ingestionDone && !recommendationDone ? "block" : "none";
@@ -87,6 +98,11 @@
 
   document.getElementById("btn-extract").addEventListener("click", async () => {
     await apiPost(`/jobs/${jobId}/extract-frames`, {});
+    refresh();
+  });
+
+  document.getElementById("btn-align").addEventListener("click", async () => {
+    await apiPost(`/jobs/${jobId}/align`, {});
     refresh();
   });
 

@@ -31,3 +31,15 @@ def test_recommendation_page_served(client):
     response = client.get("/recommendation.html")
     assert response.status_code == 200
     assert 'id="content"' in response.text
+
+
+def test_job_page_contains_align_button(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert 'id="btn-align"' in response.text
+
+
+def test_alignment_page_served(client):
+    response = client.get("/alignment.html")
+    assert response.status_code == 200
+    assert 'id="content"' in response.text
