@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Job nou — Splat Prep</title>
+<link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+<h1>Job nou</h1>
+<p class="subtitle">Alege o sursa video</p>
+
+<div class="card">
+  <input type="text" id="job-name" placeholder="Nume job (ex. Curte interioara)" />
+</div>
+
+<div class="card">
+  <div class="job-meta" style="margin-bottom:8px;">Fisier local pe acest PC</div>
+  <input type="text" id="local-path" placeholder="Cale completa (ex. C:\Videos\clip.mp4)" />
+  <button class="btn" id="btn-local">Foloseste fisier local</button>
+</div>
+
+<div class="card">
+  <div class="job-meta" style="margin-bottom:8px;">Upload de pe telefon</div>
+  <input type="file" id="file-input" accept="video/*" />
+  <button class="btn" id="btn-upload">Incarca</button>
+  <p class="subtitle" id="upload-status"></p>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+  async function ensureJob() {
+    const name = document.getElementById("job-name").value.trim();
+    if (!name) {
+      alert("Introdu un nume pentru job.");
+      return null;
+    }
+    const job = await apiPost("/jobs", { name });
+    return job.id;
+  }
+
+  document.getElementById("btn-local").addEventListener("click", async () => {
+    const jobId = await ensureJob();
+    if (!jobId) return;
+    const sourcePath = document.getElementById("local-path").value.trim();
+    if (!sourcePath) {
+      alert("Introdu o cale de fisier.");
+      return;
+    }
+    await apiPost(`/jobs/${jobId}/ingest/local`, { source_path: sourcePath });
+    window.location.href = `/job.html?id=${jobId}`;
+  });
+
+  const CHUNK_SIZE = 8 * 1024 * 1024;
+
+  async function uploadFile(jobId, file) {
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    const { upload_id: uploadId } = await apiPost(`/jobs/${jobId}/uploads`, {
+      filename: file.name,
+      total_chunks: totalChunks,
+    });
+
+    for (let index = 0; index < totalChunks; index += 1) {
+      const start = index * CHUNK_SIZE;
+      const chunk = file.slice(start, start + CHUNK_SIZE);
+      const response = await fetch(
+        `/jobs/${jobId}/uploads/${uploadId}/chunks/${index}`,
+        { method: "PUT", body: chunk }
+      );
+      if (!response.ok) {
+        throw new Error(`Chunk ${index} failed: ${response.status}`);
+      }
+      document.getElementById("upload-status").textContent =
+        `Se incarca... ${index + 1}/${totalChunks}`;
+    }
+
+    await apiPost(`/jobs/${jobId}/uploads/${uploadId}/complete`, {});
+  }
+
+  document.getElementById("btn-upload").addEventListener("click", async () => {
+    const jobId = await ensureJob();
+    if (!jobId) return;
+    const file = document.getElementById("file-input").files[0];
+    if (!file) {
+      alert("Alege un fisier video.");
+      return;
+    }
+    document.getElementById("upload-status").textContent = "Se incarca...";
+    await uploadFile(jobId, file);
+    window.location.href = `/job.html?id=${jobId}`;
+  });
+</script>
+</body>
+</html>
