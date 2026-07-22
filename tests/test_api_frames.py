@@ -86,3 +86,9 @@ def test_get_frame_rejects_path_traversal(client):
     job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
     response = client.get(f"/jobs/{job_id}/frames/..%2F..%2Fapp%2Fmain.py")
     assert response.status_code in (400, 404)
+
+
+def test_get_frame_rejects_bare_dotdot_filename(client):
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+    response = client.get(f"/jobs/{job_id}/frames/%2E%2E")
+    assert response.status_code == 400

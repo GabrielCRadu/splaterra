@@ -59,7 +59,7 @@ def get_frame(
     if store.get_job(job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
     safe_name = Path(filename).name
-    if not safe_name or safe_name != filename:
+    if not safe_name or safe_name in (".", "..") or safe_name != filename:
         raise HTTPException(status_code=400, detail=f"Invalid filename: {filename!r}")
     frame_path = frames_dir(job_id) / safe_name
     if not frame_path.is_file():
