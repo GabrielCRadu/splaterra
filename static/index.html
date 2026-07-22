@@ -7,7 +7,66 @@
 <link rel="stylesheet" href="/css/app.css" />
 </head>
 <body>
-<h1>Splat Prep</h1>
-<p class="subtitle">Se incarca...</p>
+<h1>Job-uri</h1>
+<p class="subtitle" id="job-count">Se incarca...</p>
+
+<div id="job-list"></div>
+
+<a class="btn" href="/new-job.html">+ Job nou</a>
+
+<script src="/js/app.js"></script>
+<script>
+  const STAGE_LABELS = {
+    ingestion: "Ingestie",
+    frame_extraction: "Extragere cadre",
+    recommendation: "Recomandare",
+  };
+
+  function stagePill(stages) {
+    if (stages.length === 0) {
+      return '<span class="pill pill-gray">Nou</span>';
+    }
+    const failed = stages.find((s) => s.status === "failed");
+    if (failed) {
+      return `<span class="pill pill-orange">${STAGE_LABELS[failed.stage] || failed.stage} esuat</span>`;
+    }
+    const running = stages.find((s) => s.status === "running");
+    if (running) {
+      return `<span class="pill pill-green">${STAGE_LABELS[running.stage] || running.stage}...</span>`;
+    }
+    return '<span class="pill pill-gray">Gata</span>';
+  }
+
+  async function loadJobs() {
+    const jobs = await apiGet("/jobs");
+    document.getElementById("job-count").textContent =
+      jobs.length === 0 ? "Niciun job inca" : `${jobs.length} job-uri`;
+
+    const list = document.getElementById("job-list");
+    if (jobs.length === 0) {
+      list.innerHTML = '<p class="empty">Apasa "+ Job nou" ca sa incepi.</p>';
+      return;
+    }
+
+    const rows = await Promise.all(
+      jobs.map(async (job) => {
+        const stages = await apiGet(`/jobs/${job.id}/stages`);
+        return `
+          <a class="job-row" href="/job.html?id=${job.id}">
+            <div class="job-thumb">&#127916;</div>
+            <div class="job-info">
+              <div class="job-name">${job.name}</div>
+              <div class="job-meta">${new Date(job.created_at).toLocaleString("ro-RO")}</div>
+            </div>
+            ${stagePill(stages)}
+          </a>
+        `;
+      })
+    );
+    list.innerHTML = `<div class="card" style="padding:0;">${rows.join("")}</div>`;
+  }
+
+  loadJobs();
+</script>
 </body>
 </html>
