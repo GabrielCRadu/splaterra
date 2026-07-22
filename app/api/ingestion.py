@@ -43,7 +43,10 @@ def create_upload(
 ) -> dict[str, str]:
     if store.get_job(job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    upload_id = start_upload(job_id, body.filename, body.total_chunks)
+    try:
+        upload_id = start_upload(job_id, body.filename, body.total_chunks)
+    except UploadError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"upload_id": upload_id}
 
 
@@ -69,6 +72,8 @@ def list_received_chunks(job_id: str, upload_id: str) -> dict[str, list[int]]:
 def finish_upload(
     job_id: str, upload_id: str, store: JobStore = Depends(get_job_store)
 ) -> dict[str, str]:
+    if store.get_job(job_id) is None:
+        raise HTTPException(status_code=404, detail="Job not found")
     try:
         destination = complete_upload(store, job_id, upload_id)
     except UploadError as exc:

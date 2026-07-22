@@ -30,3 +30,20 @@ def test_complete_upload_missing_chunks_returns_400(client):
 
     response = client.post(f"/jobs/{job_id}/uploads/{upload_id}/complete")
     assert response.status_code == 400
+
+
+def test_finish_upload_missing_job_returns_404(client):
+    response = client.post(
+        "/jobs/does-not-exist/uploads/some-upload-id/complete"
+    )
+    assert response.status_code == 404
+
+
+def test_create_upload_path_traversal_filename_returns_400(client):
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+
+    response = client.post(
+        f"/jobs/{job_id}/uploads",
+        json={"filename": "../../evil.txt", "total_chunks": 1},
+    )
+    assert response.status_code == 400

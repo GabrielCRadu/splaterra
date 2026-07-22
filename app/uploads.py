@@ -22,11 +22,15 @@ def _meta_path(job_id: str, upload_id: str) -> Path:
 
 
 def start_upload(job_id: str, filename: str, total_chunks: int) -> str:
+    safe_name = Path(filename).name
+    if not safe_name or safe_name in (".", "..") or safe_name != filename:
+        raise UploadError(f"Invalid filename: {filename!r}")
+
     upload_id = str(uuid.uuid4())
     chunks_dir = upload_chunks_dir(job_id, upload_id)
     chunks_dir.mkdir(parents=True, exist_ok=True)
     _meta_path(job_id, upload_id).write_text(
-        json.dumps({"filename": filename, "total_chunks": total_chunks})
+        json.dumps({"filename": safe_name, "total_chunks": total_chunks})
     )
     return upload_id
 

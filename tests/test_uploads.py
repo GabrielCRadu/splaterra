@@ -67,3 +67,25 @@ def test_complete_upload_unknown_upload_records_failed_stage(job_store):
     assert stage is not None
     assert stage.status == "failed"
     assert stage.error is not None
+
+
+def test_start_upload_rejects_absolute_path_filename(job_store):
+    job = job_store.create_job("Test")
+    with pytest.raises(UploadError):
+        start_upload(job.id, "/etc/passwd", total_chunks=1)
+
+
+def test_start_upload_rejects_path_traversal_filename(job_store):
+    job = job_store.create_job("Test")
+    with pytest.raises(UploadError):
+        start_upload(job.id, "../../evil.txt", total_chunks=1)
+
+
+def test_start_upload_accepts_normal_filename(job_store):
+    job = job_store.create_job("Test")
+    upload_id = start_upload(job.id, "video.mp4", total_chunks=1)
+    save_chunk(job.id, upload_id, 0, b"AAA")
+
+    destination = complete_upload(job_store, job.id, upload_id)
+    assert destination.name == "video.mp4"
+    assert destination.read_bytes() == b"AAA"
