@@ -11,6 +11,7 @@ class Job:
     raw_video_path: str | None = None
     frames_dir: str | None = None
     frame_count: int | None = None
+    recommendation_json: str | None = None
 
 
 @dataclass

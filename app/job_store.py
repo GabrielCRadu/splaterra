@@ -85,6 +85,7 @@ class JobStore:
             raw_video_path=row["raw_video_path"],
             frames_dir=row["frames_dir"],
             frame_count=row["frame_count"],
+            recommendation_json=row["recommendation_json"],
         )
 
     @staticmethod

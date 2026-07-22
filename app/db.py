@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     created_at TEXT NOT NULL,
     raw_video_path TEXT,
     frames_dir TEXT,
-    frame_count INTEGER
+    frame_count INTEGER,
+    recommendation_json TEXT
 );
 
 CREATE TABLE IF NOT EXISTS job_stages (
