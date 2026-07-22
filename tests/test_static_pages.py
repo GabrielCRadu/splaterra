@@ -25,3 +25,9 @@ def test_frames_page_contains_frame_grid(client):
     response = client.get("/frames.html")
     assert response.status_code == 200
     assert 'id="frame-grid"' in response.text
+
+
+def test_recommendation_page_served(client):
+    response = client.get("/recommendation.html")
+    assert response.status_code == 200
+    assert 'id="content"' in response.text

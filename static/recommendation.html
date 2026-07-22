@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Recomandare — Splat Prep</title>
+<link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+<h1>Recomandare</h1>
+<p class="subtitle" id="status">Se incarca...</p>
+
+<div id="content"></div>
+
+<script src="/js/app.js"></script>
+<script>
+  const jobId = jobIdFromQuery();
+
+  async function load() {
+    try {
+      const rec = await apiGet(`/jobs/${jobId}/recommendation`);
+      document.getElementById("status").textContent = "";
+      const verdictClass = rec.verdict.use_cloud ? "pill-orange" : "pill-green";
+      const verdictLabel = rec.verdict.use_cloud ? "Cloud recomandat" : "Local e suficient";
+      document.getElementById("content").innerHTML = `
+        <div class="card">
+          <div class="job-row">
+            <div class="job-info">
+              <div class="job-name">Verdict</div>
+              <div class="job-meta">${rec.verdict.reason}</div>
+            </div>
+            <span class="pill ${verdictClass}">${verdictLabel}</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="job-name" style="margin-bottom:8px;">RealityScan</div>
+          <div class="job-meta">Downscale: 1/${rec.realityscan.downscale}</div>
+          <div class="job-meta">Rolling-shutter correction: ${rec.realityscan.rolling_shutter_correction ? "activ" : "inactiv"}</div>
+        </div>
+        <div class="card">
+          <div class="job-name" style="margin-bottom:8px;">LichtFeld</div>
+          <div class="job-meta">Max gaussieni: ${rec.lichtfeld.max_gaussians.toLocaleString("ro-RO")}</div>
+          <div class="job-meta">bf16: ${rec.lichtfeld.bf16 ? "activ" : "inactiv"}</div>
+        </div>
+      `;
+    } catch (err) {
+      document.getElementById("status").textContent = "Recomandarea nu a fost calculata inca.";
+    }
+  }
+
+  load();
+</script>
+</body>
+</html>
