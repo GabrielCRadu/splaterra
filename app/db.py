@@ -13,7 +13,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     raw_video_path TEXT,
     frames_dir TEXT,
     frame_count INTEGER,
-    recommendation_json TEXT
+    recommendation_json TEXT,
+    registration_path TEXT,
+    point_cloud_path TEXT
 );
 
 CREATE TABLE IF NOT EXISTS job_stages (

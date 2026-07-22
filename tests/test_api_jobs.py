@@ -61,3 +61,12 @@ def test_get_job_stages_empty_list_for_new_job(client):
 def test_get_job_stages_unknown_job_returns_404(client):
     response = client.get("/jobs/does-not-exist/stages")
     assert response.status_code == 404
+
+
+def test_get_job_includes_alignment_fields(client):
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+    response = client.get(f"/jobs/{job_id}")
+    body = response.json()
+    assert "registration_path" in body
+    assert "point_cloud_path" in body
+    assert body["registration_path"] is None

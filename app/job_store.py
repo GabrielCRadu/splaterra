@@ -92,6 +92,8 @@ class JobStore:
             frames_dir=row["frames_dir"],
             frame_count=row["frame_count"],
             recommendation_json=row["recommendation_json"],
+            registration_path=row["registration_path"],
+            point_cloud_path=row["point_cloud_path"],
         )
 
     @staticmethod

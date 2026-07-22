@@ -59,3 +59,15 @@ def test_list_stages_returns_all_stages_for_job(job_store):
 def test_list_stages_empty_for_job_with_no_stages(job_store):
     job = job_store.create_job("Test")
     assert job_store.list_stages(job.id) == []
+
+
+def test_update_job_sets_registration_and_point_cloud_paths(job_store):
+    job = job_store.create_job("Test")
+    job_store.update_job(
+        job.id,
+        registration_path="/data/alignment/registration.csv",
+        point_cloud_path="/data/alignment/points.ply",
+    )
+    fetched = job_store.get_job(job.id)
+    assert fetched.registration_path == "/data/alignment/registration.csv"
+    assert fetched.point_cloud_path == "/data/alignment/points.ply"
