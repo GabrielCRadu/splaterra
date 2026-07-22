@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Job — Splat Prep</title>
+<link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+<h1 id="job-name">...</h1>
+<p class="subtitle" id="job-meta"></p>
+
+<div class="card" id="stage-list"></div>
+
+<button class="btn" id="btn-extract" style="display:none;">Extrage cadre</button>
+<a class="btn-ghost" id="link-frames" style="display:none;">Revizuieste cadrele</a>
+<button class="btn" id="btn-recommend" style="display:none;">Calculeaza recomandare</button>
+<a class="btn-ghost" id="link-recommendation" style="display:none;">Vezi recomandarea</a>
+
+<script src="/js/app.js"></script>
+<script>
+  const jobId = jobIdFromQuery();
+  const STAGE_LABELS = {
+    ingestion: "Ingestie",
+    frame_extraction: "Extragere cadre",
+    recommendation: "Recomandare",
+  };
+
+  function renderStages(stages) {
+    const list = document.getElementById("stage-list");
+    if (stages.length === 0) {
+      list.innerHTML = '<p class="empty">Niciun pas pornit inca.</p>';
+      return;
+    }
+    list.innerHTML = stages
+      .map((s) => {
+        const pillClass =
+          s.status === "done" ? "pill-green" : s.status === "failed" ? "pill-orange" : "pill-gray";
+        const errorLine = s.error ? `<div class="job-meta">${s.error}</div>` : "";
+        return `
+          <div class="job-row">
+            <div class="job-info">
+              <div class="job-name">${STAGE_LABELS[s.stage] || s.stage}</div>
+              ${errorLine}
+            </div>
+            <span class="pill ${pillClass}">${s.status}</span>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  function stageStatus(stages, name) {
+    const stage = stages.find((s) => s.stage === name);
+    return stage ? stage.status : null;
+  }
+
+  function updateActions(stages) {
+    const ingestionDone = stageStatus(stages, "ingestion") === "done";
+    const extractionDone = stageStatus(stages, "frame_extraction") === "done";
+    const recommendationDone = stageStatus(stages, "recommendation") === "done";
+
+    document.getElementById("btn-extract").style.display =
+      ingestionDone && !extractionDone ? "block" : "none";
+
+    const framesLink = document.getElementById("link-frames");
+    framesLink.style.display = extractionDone ? "block" : "none";
+    framesLink.href = `/frames.html?id=${jobId}`;
+
+    document.getElementById("btn-recommend").style.display =
+      ingestionDone && !recommendationDone ? "block" : "none";
+
+    const recommendationLink = document.getElementById("link-recommendation");
+    recommendationLink.style.display = recommendationDone ? "block" : "none";
+    recommendationLink.href = `/recommendation.html?id=${jobId}`;
+  }
+
+  async function refresh() {
+    const job = await apiGet(`/jobs/${jobId}`);
+    document.getElementById("job-name").textContent = job.name;
+    document.getElementById("job-meta").textContent = new Date(job.created_at).toLocaleString("ro-RO");
+
+    const stages = await apiGet(`/jobs/${jobId}/stages`);
+    renderStages(stages);
+    updateActions(stages);
+  }
+
+  document.getElementById("btn-extract").addEventListener("click", async () => {
+    await apiPost(`/jobs/${jobId}/extract-frames`, {});
+    refresh();
+  });
+
+  document.getElementById("btn-recommend").addEventListener("click", async () => {
+    await apiPost(`/jobs/${jobId}/recommend`, {});
+    refresh();
+  });
+
+  refresh();
+  pollStages(jobId, (stages) => {
+    renderStages(stages);
+    updateActions(stages);
+  });
+</script>
+</body>
+</html>

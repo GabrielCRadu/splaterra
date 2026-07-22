@@ -11,3 +11,11 @@ def test_new_job_page_contains_local_and_upload_forms(client):
     assert response.status_code == 200
     assert 'id="local-path"' in response.text
     assert 'id="file-input"' in response.text
+
+
+def test_job_page_contains_stage_list_and_action_buttons(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert 'id="stage-list"' in response.text
+    assert 'id="btn-extract"' in response.text
+    assert 'id="btn-recommend"' in response.text
