@@ -20,5 +20,9 @@ def frames_dir(job_id: str) -> Path:
     return job_dir(job_id) / "frames"
 
 
+def alignment_dir(job_id: str) -> Path:
+    return job_dir(job_id) / "alignment"
+
+
 def upload_chunks_dir(job_id: str, upload_id: str) -> Path:
     return job_dir(job_id) / "uploads" / upload_id / "chunks"
