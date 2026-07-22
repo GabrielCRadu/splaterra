@@ -18,7 +18,9 @@ def _now() -> str:
 
 def import_local_file(store: JobStore, job_id: str, source_path: Path) -> Path:
     if not source_path.is_file():
-        raise IngestionError(f"Source file not found: {source_path}")
+        message = f"Source file not found: {source_path}"
+        store.upsert_stage(job_id, "ingestion", "failed", started_at=_now(), finished_at=_now(), error=message)
+        raise IngestionError(message)
 
     destination_dir = raw_dir(job_id)
     destination_dir.mkdir(parents=True, exist_ok=True)

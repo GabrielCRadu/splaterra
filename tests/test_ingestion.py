@@ -26,3 +26,15 @@ def test_import_local_file_missing_source_raises(job_store, tmp_path):
 
     with pytest.raises(IngestionError):
         import_local_file(job_store, job.id, tmp_path / "missing.mp4")
+
+
+def test_import_local_file_missing_source_records_failed_stage(job_store, tmp_path):
+    job = job_store.create_job("Test")
+
+    with pytest.raises(IngestionError):
+        import_local_file(job_store, job.id, tmp_path / "missing.mp4")
+
+    stage = job_store.get_stage(job.id, "ingestion")
+    assert stage is not None
+    assert stage.status == "failed"
+    assert stage.error is not None
