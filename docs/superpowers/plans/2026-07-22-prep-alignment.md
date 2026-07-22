@@ -488,7 +488,7 @@ Expected: PASS (all tests in these three files)
 - [ ] **Step 9: Run the full suite to check for regressions**
 
 Run: `python -m pytest -v`
-Expected: all pass, 107 passed (98 pre-existing + 6 from Task 1 + 3 new here — exact count isn't load-bearing, zero failures is)
+Expected: all pass, 107 passed (98 pre-existing + 7 from Task 1 (1 in test_paths.py + 6 in test_realityscan.py) + 2 new here — exact count isn't load-bearing, zero failures is)
 
 - [ ] **Step 10: Commit**
 
@@ -1065,7 +1065,7 @@ Expected: PASS — either branch (`done` or `failed`) is an acceptable outcome p
 - [ ] **Step 3: Run the full suite one more time**
 
 Run: `python -m pytest -v`
-Expected: all tests pass (or pass+skip cleanly), zero failures — 120 passed on this machine (116 from Tasks 1-5 + 1 new here + the 3 new tests from Task 5 already counted in Task 4's post-suite total... exact count isn't load-bearing, what matters is zero failures)
+Expected: all tests pass (or pass+skip cleanly), zero failures — 119 passed on this machine (116 after Task 4 + 2 from Task 5 + 1 new here — exact count isn't load-bearing, what matters is zero failures)
 
 - [ ] **Step 4: Commit**
 
