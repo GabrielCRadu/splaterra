@@ -49,7 +49,12 @@ def received_chunks(job_id: str, upload_id: str) -> list[int]:
 def complete_upload(store: JobStore, job_id: str, upload_id: str) -> Path:
     meta_path = _meta_path(job_id, upload_id)
     if not meta_path.exists():
-        raise UploadError(f"Unknown upload: {upload_id}")
+        error_msg = f"Unknown upload: {upload_id}"
+        now = datetime.now(timezone.utc).isoformat()
+        store.upsert_stage(
+            job_id, "ingestion", "failed", started_at=now, finished_at=now, error=error_msg
+        )
+        raise UploadError(error_msg)
     meta = json.loads(meta_path.read_text())
     filename: str = meta["filename"]
     total_chunks: int = meta["total_chunks"]

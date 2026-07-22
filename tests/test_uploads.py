@@ -55,3 +55,15 @@ def test_complete_upload_missing_chunks_records_failed_stage(job_store):
     assert stage is not None
     assert stage.status == "failed"
     assert stage.error is not None
+
+
+def test_complete_upload_unknown_upload_records_failed_stage(job_store):
+    job = job_store.create_job("Test")
+
+    with pytest.raises(UploadError):
+        complete_upload(job_store, job.id, "no-such-upload")
+
+    stage = job_store.get_stage(job.id, "ingestion")
+    assert stage is not None
+    assert stage.status == "failed"
+    assert stage.error is not None
