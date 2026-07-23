@@ -128,23 +128,73 @@ select { appearance: none; -webkit-appearance: none; }
 
 .empty { color: var(--ink-dim); font-size: 13px; text-align: center; padding: 24px 0; }
 
-.job-list-row { display: flex; align-items: center; }
+.job-list-row {
+  display: flex;
+  align-items: center;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
 .job-list-row + .job-list-row { border-top: 1px solid var(--hairline); }
 .job-list-row .job-row { flex: 1; }
 
-.job-delete-btn {
+@keyframes jiggle {
+  0% { transform: rotate(-1deg); }
+  50% { transform: rotate(1deg); }
+  100% { transform: rotate(-1deg); }
+}
+.job-list-row.jiggle-mode {
+  animation: jiggle 0.22s ease-in-out infinite;
+}
+.job-list-row.jiggle-mode:nth-child(even) { animation-delay: 0.08s; }
+@media (prefers-reduced-motion: reduce) {
+  .job-list-row.jiggle-mode { animation: none; }
+}
+
+.job-list-row.dragging {
+  position: fixed;
+  z-index: 200;
+  pointer-events: none;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  border-radius: 22px;
+  background: linear-gradient(180deg, #1a1a1c 0%, #131315 100%);
+  transform: scale(1.04);
+  animation: none;
+}
+
+.done-button {
+  position: fixed;
+  top: 20px;
+  right: 16px;
   background: none;
   border: none;
-  color: var(--ink-dim);
-  font-size: 18px;
-  line-height: 1;
-  padding: 10px;
-  margin-right: 4px;
+  color: var(--accent-green);
+  font-size: 14.5px;
+  font-weight: 650;
   cursor: pointer;
-  border-radius: 10px;
-  flex-shrink: 0;
+  padding: 6px 4px;
+  z-index: 150;
 }
-.job-delete-btn:active { background: rgba(255, 69, 58, 0.12); color: var(--accent-red); }
+
+.trash-target {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--accent-red);
+  color: #2b0704;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  box-shadow: 0 10px 30px rgba(255, 69, 58, 0.4);
+  z-index: 150;
+  transition: transform 0.15s ease;
+}
+.trash-target.armed { transform: translateX(-50%) scale(1.25); }
 
 .btn-danger {
   display: block;

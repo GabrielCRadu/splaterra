@@ -14,6 +14,9 @@
 
 <a class="btn" href="/new-job.html">+ Job nou</a>
 
+<button class="done-button" id="done-button" style="display:none;">Gata</button>
+<div class="trash-target" id="trash-target" style="display:none;" aria-label="Trage aici ca sa stergi">&#128465;&#65039;</div>
+
 <div class="modal-overlay" id="delete-modal" style="display:none;">
   <div class="modal-card">
     <div class="modal-title">Stergi job-ul?</div>
@@ -64,7 +67,7 @@
       jobs.map(async (job) => {
         const stages = await apiGet(`/jobs/${job.id}/stages`);
         return `
-          <div class="job-list-row">
+          <div class="job-list-row" data-job-id="${job.id}" data-job-name="${escapeHtml(job.name)}">
             <a class="job-row" href="/job.html?id=${job.id}">
               <div class="job-thumb">&#127916;</div>
               <div class="job-info">
@@ -73,26 +76,128 @@
               </div>
               ${stagePill(stages)}
             </a>
-            <button
-              class="job-delete-btn"
-              data-job-id="${job.id}"
-              data-job-name="${escapeHtml(job.name)}"
-              aria-label="Sterge job"
-            >&#128465;&#65039;</button>
           </div>
         `;
       })
     );
     list.innerHTML = `<div class="card" style="padding:0;">${rows.join("")}</div>`;
 
-    list.querySelectorAll(".job-delete-btn").forEach((btn) => {
-      btn.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        showDeleteModal(btn.dataset.jobId, btn.dataset.jobName);
-      });
+    list.querySelectorAll(".job-list-row").forEach((row) => {
+      attachRowGestures(row, row.dataset.jobId, row.dataset.jobName);
+      if (jiggleMode) row.classList.add("jiggle-mode");
     });
   }
+
+  // --- Press-and-hold -> jiggle -> drag-to-trash deletion ---
+
+  let jiggleMode = false;
+  let longPressTimer = null;
+  let dragOffsetX = 0;
+  let dragOffsetY = 0;
+
+  const LONG_PRESS_MS = 500;
+  const MOVE_CANCEL_PX = 10;
+
+  function enterJiggleMode() {
+    jiggleMode = true;
+    document.querySelectorAll(".job-list-row").forEach((row) => row.classList.add("jiggle-mode"));
+    document.getElementById("done-button").style.display = "block";
+    document.getElementById("trash-target").style.display = "flex";
+  }
+
+  function exitJiggleMode() {
+    jiggleMode = false;
+    document.querySelectorAll(".job-list-row").forEach((row) => row.classList.remove("jiggle-mode"));
+    document.getElementById("done-button").style.display = "none";
+    document.getElementById("trash-target").style.display = "none";
+  }
+
+  function isOverTrash(x, y) {
+    const rect = document.getElementById("trash-target").getBoundingClientRect();
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+  }
+
+  function attachRowGestures(row, jobId, jobName) {
+    row.addEventListener("pointerdown", (event) => {
+      if (event.button !== undefined && event.button !== 0) return;
+
+      const startX = event.clientX;
+      const startY = event.clientY;
+      const rowRect = row.getBoundingClientRect();
+      dragOffsetX = startX - rowRect.left;
+      dragOffsetY = startY - rowRect.top;
+
+      longPressTimer = setTimeout(() => {
+        longPressTimer = null;
+        if (!jiggleMode) enterJiggleMode();
+        startDragging(row, jobId, jobName, rowRect, startX, startY);
+      }, LONG_PRESS_MS);
+
+      const cancelIfMoved = (moveEvent) => {
+        if (
+          longPressTimer &&
+          (Math.abs(moveEvent.clientX - startX) > MOVE_CANCEL_PX ||
+            Math.abs(moveEvent.clientY - startY) > MOVE_CANCEL_PX)
+        ) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      };
+      const clearOnUp = () => {
+        document.removeEventListener("pointermove", cancelIfMoved);
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      };
+      document.addEventListener("pointermove", cancelIfMoved);
+      document.addEventListener("pointerup", clearOnUp, { once: true });
+    });
+
+    row.addEventListener("click", (event) => {
+      if (jiggleMode) event.preventDefault();
+    });
+  }
+
+  function startDragging(row, jobId, jobName, originalRect, startX, startY) {
+    row.classList.add("dragging");
+    row.classList.remove("jiggle-mode");
+    row.style.width = originalRect.width + "px";
+    row.style.left = startX - dragOffsetX + "px";
+    row.style.top = startY - dragOffsetY + "px";
+
+    function onMove(event) {
+      row.style.left = event.clientX - dragOffsetX + "px";
+      row.style.top = event.clientY - dragOffsetY + "px";
+      document
+        .getElementById("trash-target")
+        .classList.toggle("armed", isOverTrash(event.clientX, event.clientY));
+    }
+
+    function onUp(event) {
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      document.getElementById("trash-target").classList.remove("armed");
+
+      row.classList.remove("dragging");
+      row.style.position = "";
+      row.style.left = "";
+      row.style.top = "";
+      row.style.width = "";
+      if (jiggleMode) row.classList.add("jiggle-mode");
+
+      if (isOverTrash(event.clientX, event.clientY)) {
+        showDeleteModal(jobId, jobName);
+      }
+    }
+
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+  }
+
+  document.getElementById("done-button").addEventListener("click", exitJiggleMode);
+
+  // --- Delete confirmation modal (reused by the drag-to-trash gesture above) ---
 
   let jobIdPendingDelete = null;
 

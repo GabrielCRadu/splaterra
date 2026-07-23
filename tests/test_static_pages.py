@@ -19,6 +19,18 @@ def test_index_page_contains_delete_confirmation_modal(client):
     assert response.text.index('id="confirm-delete-btn"') < response.text.index('id="cancel-delete-btn"')
 
 
+def test_index_page_contains_jiggle_drag_delete_controls(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert 'id="done-button"' in response.text
+    assert 'id="trash-target"' in response.text
+    assert "jiggle-mode" in response.text
+    assert "attachRowGestures" in response.text
+    # The old always-visible per-row delete button is gone - press-and-hold
+    # + drag-to-trash replaces it entirely, not alongside it.
+    assert "job-delete-btn" not in response.text
+
+
 def test_new_job_page_contains_local_and_upload_forms(client):
     response = client.get("/new-job.html")
     assert response.status_code == 200
