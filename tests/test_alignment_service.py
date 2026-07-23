@@ -76,3 +76,24 @@ def test_compute_alignment_marks_stage_failed_on_non_realityscan_error(job_store
     stage = job_store.get_stage(job.id, "alignment")
     assert stage.status == "failed"
     assert stage.error == "disk full"
+
+
+def test_compute_alignment_forwards_progress_to_job_store(job_store, tmp_path, monkeypatch):
+    job = job_store.create_job("Test")
+    job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"))
+
+    def fake_run_alignment(frames_dir, output_dir, *, progress_path, on_progress):
+        on_progress(40.0)
+        on_progress(95.0)
+        return AlignmentResult(
+            registration_path=tmp_path / "registration.csv",
+            point_cloud_path=tmp_path / "points.ply",
+            log="ok",
+        )
+
+    monkeypatch.setattr(alignment_service, "run_alignment", fake_run_alignment)
+
+    alignment_service.compute_alignment(job_store, job.id)
+
+    stage = job_store.get_stage(job.id, "alignment")
+    assert stage.progress_percent == 95.0

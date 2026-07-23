@@ -60,3 +60,20 @@ def test_extract_frames_marks_stage_failed_on_error(job_store, monkeypatch):
     stage = job_store.get_stage(job.id, "frame_extraction")
     assert stage.status == "failed"
     assert stage.error == "boom"
+
+
+def test_extract_frames_forwards_progress_to_job_store(job_store, tmp_path, monkeypatch):
+    job = job_store.create_job("Test")
+    job_store.update_job(job.id, raw_video_path=str(tmp_path / "video.mp4"))
+
+    def fake_run_extraction(video_path, output_dir, *, selection_method, num_frames, fps, on_progress):
+        on_progress(25.0)
+        on_progress(75.0)
+        return ExtractionResult(frames=[Path("f1.jpg")], log="ok")
+
+    monkeypatch.setattr(extraction, "run_extraction", fake_run_extraction)
+
+    extraction.extract_frames(job_store, job.id)
+
+    stage = job_store.get_stage(job.id, "frame_extraction")
+    assert stage.progress_percent == 75.0
