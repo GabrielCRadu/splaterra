@@ -53,19 +53,21 @@ class JobStore:
         finished_at: str | None = None,
         log: str | None = None,
         error: str | None = None,
+        progress_percent: float | None = None,
     ) -> None:
         self._conn.execute(
             """
-            INSERT INTO job_stages (job_id, stage, status, started_at, finished_at, log, error)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO job_stages (job_id, stage, status, started_at, finished_at, log, error, progress_percent)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(job_id, stage) DO UPDATE SET
                 status = excluded.status,
                 started_at = COALESCE(excluded.started_at, job_stages.started_at),
                 finished_at = excluded.finished_at,
                 log = excluded.log,
-                error = excluded.error
+                error = excluded.error,
+                progress_percent = COALESCE(excluded.progress_percent, job_stages.progress_percent)
             """,
-            (job_id, stage, status, started_at, finished_at, log, error),
+            (job_id, stage, status, started_at, finished_at, log, error, progress_percent),
         )
         self._conn.commit()
 
@@ -111,4 +113,5 @@ class JobStore:
             finished_at=row["finished_at"],
             log=row["log"],
             error=row["error"],
+            progress_percent=row["progress_percent"],
         )

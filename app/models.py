@@ -25,3 +25,4 @@ class JobStage:
     finished_at: str | None = None
     log: str | None = None
     error: str | None = None
+    progress_percent: float | None = None

@@ -81,3 +81,21 @@ def test_update_job_sets_registration_and_point_cloud_paths(job_store):
     fetched = job_store.get_job(job.id)
     assert fetched.registration_path == "/data/alignment/registration.csv"
     assert fetched.point_cloud_path == "/data/alignment/points.ply"
+
+
+def test_upsert_stage_sets_and_preserves_progress_percent(job_store):
+    job = job_store.create_job("Test")
+
+    job_store.upsert_stage(job.id, "frame_extraction", "running", started_at="t0", progress_percent=12.5)
+    stage = job_store.get_stage(job.id, "frame_extraction")
+    assert stage.progress_percent == 12.5
+
+    # A later call that doesn't pass progress_percent must not reset it to None
+    job_store.upsert_stage(job.id, "frame_extraction", "running")
+    stage = job_store.get_stage(job.id, "frame_extraction")
+    assert stage.progress_percent == 12.5
+
+    # An explicit new value does update it
+    job_store.upsert_stage(job.id, "frame_extraction", "running", progress_percent=47.0)
+    stage = job_store.get_stage(job.id, "frame_extraction")
+    assert stage.progress_percent == 47.0

@@ -108,3 +108,33 @@ def test_delete_job_blocked_while_stage_running(client):
 
     # job must still exist - blocked deletion is not a partial deletion
     assert client.get(f"/jobs/{job_id}").status_code == 200
+
+
+def test_get_job_stages_includes_progress_percent(client):
+    from app import db
+    from app.job_store import JobStore
+
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+
+    conn = db.connect()
+    JobStore(conn).upsert_stage(job_id, "frame_extraction", "running", started_at="t0", progress_percent=33.0)
+    conn.close()
+
+    response = client.get(f"/jobs/{job_id}/stages")
+    assert response.status_code == 200
+    stage = response.json()[0]
+    assert stage["progress_percent"] == 33.0
+
+
+def test_get_job_stages_progress_percent_defaults_to_none(client):
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+
+    from app import db
+    from app.job_store import JobStore
+
+    conn = db.connect()
+    JobStore(conn).upsert_stage(job_id, "ingestion", "done")
+    conn.close()
+
+    response = client.get(f"/jobs/{job_id}/stages")
+    assert response.json()[0]["progress_percent"] is None

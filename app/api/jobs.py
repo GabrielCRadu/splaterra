@@ -35,6 +35,7 @@ class JobStageResponse(BaseModel):
     finished_at: str | None
     log: str | None
     error: str | None
+    progress_percent: float | None
 
 
 @router.post("", response_model=JobResponse)

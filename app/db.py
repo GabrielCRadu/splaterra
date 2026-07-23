@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS job_stages (
     finished_at TEXT,
     log TEXT,
     error TEXT,
+    progress_percent REAL,
     UNIQUE(job_id, stage)
 );
 """
