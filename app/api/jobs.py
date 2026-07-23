@@ -24,8 +24,8 @@ class JobResponse(BaseModel):
     frames_dir: str | None
     frame_count: int | None
     recommendation_json: str | None
-    registration_path: str | None
-    point_cloud_path: str | None
+    colmap_sparse_dir: str | None
+    undistorted_images_dir: str | None
 
 
 class JobStageResponse(BaseModel):

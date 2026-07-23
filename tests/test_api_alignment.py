@@ -41,13 +41,13 @@ def test_get_alignment_returns_paths_once_computed(client):
 
     conn = db.connect()
     JobStore(conn).update_job(
-        job_id, registration_path="/data/reg.csv", point_cloud_path="/data/points.ply"
+        job_id, colmap_sparse_dir="/data/sparse/0", undistorted_images_dir="/data/images"
     )
     conn.close()
 
     response = client.get(f"/jobs/{job_id}/alignment")
     assert response.status_code == 200
     assert response.json() == {
-        "registration_path": "/data/reg.csv",
-        "point_cloud_path": "/data/points.ply",
+        "colmap_sparse_dir": "/data/sparse/0",
+        "undistorted_images_dir": "/data/images",
     }

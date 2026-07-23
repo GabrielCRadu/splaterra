@@ -67,5 +67,5 @@ def test_full_ingest_extract_align_flow(client, tmp_path):
         assert alignment_stage["error"]
     else:
         job = client.get(f"/jobs/{job_id}").json()
-        assert job["registration_path"] is not None
-        assert job["point_cloud_path"] is not None
+        assert job["colmap_sparse_dir"] is not None
+        assert job["undistorted_images_dir"] is not None

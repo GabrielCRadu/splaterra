@@ -12,8 +12,8 @@ class Job:
     frames_dir: str | None = None
     frame_count: int | None = None
     recommendation_json: str | None = None
-    registration_path: str | None = None
-    point_cloud_path: str | None = None
+    colmap_sparse_dir: str | None = None
+    undistorted_images_dir: str | None = None
 
 
 @dataclass

@@ -26,9 +26,9 @@ def get_alignment(job_id: str, store: JobStore = Depends(get_job_store)) -> dict
     job = store.get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    if job.registration_path is None:
+    if job.colmap_sparse_dir is None:
         raise HTTPException(status_code=404, detail="Alignment not computed yet")
     return {
-        "registration_path": job.registration_path,
-        "point_cloud_path": job.point_cloud_path,
+        "colmap_sparse_dir": job.colmap_sparse_dir,
+        "undistorted_images_dir": job.undistorted_images_dir,
     }

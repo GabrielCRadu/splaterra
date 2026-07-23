@@ -10,6 +10,7 @@ from pathlib import Path
 
 _EPIC_GAMES_DIR = Path(r"C:\Program Files\Epic Games")
 _PROGRESS_LINE_RE = re.compile(r"^\d+\s+([\d.]+)\s+")
+_COLMAP_EXPORT_PARAMS = Path(__file__).resolve().parent / "resources" / "realityscan_colmap_export.xml"
 
 
 class RealityScanError(Exception):
@@ -18,8 +19,8 @@ class RealityScanError(Exception):
 
 @dataclass
 class AlignmentResult:
-    registration_path: Path
-    point_cloud_path: Path
+    sparse_dir: Path
+    images_dir: Path
     log: str
 
 
@@ -61,8 +62,12 @@ def run_alignment(
     crash_dir = output_dir / "crash_reports"
     crash_dir.mkdir(parents=True, exist_ok=True)
 
-    registration_path = output_dir / "registration.csv"
-    point_cloud_path = output_dir / "points.ply"
+    # calexFileFormat=COLMAP in the bundled params writes sparse/0/*.txt and
+    # images/ as siblings of the export target's parent dir, regardless of
+    # the target's own filename - verified against the real binary.
+    export_target = output_dir / "project.txt"
+    sparse_dir = output_dir / "sparse" / "0"
+    images_dir = output_dir / "images"
     project_path = output_dir / "project.rsproj"
 
     command = [
@@ -81,9 +86,8 @@ def run_alignment(
         str(frames_dir),
         "-align",
         "-exportRegistration",
-        str(registration_path),
-        "-exportSparsePointCloud",
-        str(point_cloud_path),
+        str(export_target),
+        str(_COLMAP_EXPORT_PARAMS),
         "-save",
         str(project_path),
         "-quit",
@@ -116,11 +120,12 @@ def run_alignment(
     if returncode != 0:
         raise RealityScanError(f"RealityScan exited with {returncode}:\n{log}")
 
-    if not registration_path.is_file() or not point_cloud_path.is_file():
+    required_files = ["cameras.txt", "images.txt", "points3D.txt"]
+    if not all((sparse_dir / name).is_file() for name in required_files) or not images_dir.is_dir():
         raise RealityScanError(f"RealityScan did not produce expected output files:\n{log}")
 
     return AlignmentResult(
-        registration_path=registration_path,
-        point_cloud_path=point_cloud_path,
+        sparse_dir=sparse_dir,
+        images_dir=images_dir,
         log=log,
     )

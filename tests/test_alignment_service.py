@@ -11,8 +11,8 @@ def test_compute_alignment_updates_job_and_stage(job_store, tmp_path, monkeypatc
     job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"))
 
     fake_result = AlignmentResult(
-        registration_path=tmp_path / "registration.csv",
-        point_cloud_path=tmp_path / "points.ply",
+        sparse_dir=tmp_path / "sparse" / "0",
+        images_dir=tmp_path / "images",
         log="aligned ok",
     )
     monkeypatch.setattr(alignment_service, "run_alignment", MagicMock(return_value=fake_result))
@@ -21,8 +21,8 @@ def test_compute_alignment_updates_job_and_stage(job_store, tmp_path, monkeypatc
 
     assert result is fake_result
     fetched = job_store.get_job(job.id)
-    assert fetched.registration_path == str(tmp_path / "registration.csv")
-    assert fetched.point_cloud_path == str(tmp_path / "points.ply")
+    assert fetched.colmap_sparse_dir == str(tmp_path / "sparse" / "0")
+    assert fetched.undistorted_images_dir == str(tmp_path / "images")
 
     stage = job_store.get_stage(job.id, "alignment")
     assert stage.status == "done"
@@ -86,8 +86,8 @@ def test_compute_alignment_forwards_progress_to_job_store(job_store, tmp_path, m
         on_progress(40.0)
         on_progress(95.0)
         return AlignmentResult(
-            registration_path=tmp_path / "registration.csv",
-            point_cloud_path=tmp_path / "points.ply",
+            sparse_dir=tmp_path / "sparse" / "0",
+            images_dir=tmp_path / "images",
             log="ok",
         )
 

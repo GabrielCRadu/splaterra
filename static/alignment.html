@@ -23,8 +23,8 @@
       document.getElementById("content").innerHTML = `
         <div class="card">
           <div class="job-name" style="margin-bottom:8px;">Rezultat</div>
-          <div class="job-meta">Registration: ${escapeHtml(alignment.registration_path)}</div>
-          <div class="job-meta">Nor de puncte: ${escapeHtml(alignment.point_cloud_path)}</div>
+          <div class="job-meta">COLMAP sparse: ${escapeHtml(alignment.colmap_sparse_dir)}</div>
+          <div class="job-meta">Imagini nedistorsionate: ${escapeHtml(alignment.undistorted_images_dir)}</div>
         </div>
       `;
     } catch (err) {

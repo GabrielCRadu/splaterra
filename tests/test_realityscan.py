@@ -17,6 +17,17 @@ def _fake_process(returncode: int, stdout_text: str = "") -> MagicMock:
     return process
 
 
+def _write_fake_colmap_output(output_dir):
+    sparse_dir = output_dir / "sparse" / "0"
+    sparse_dir.mkdir(parents=True, exist_ok=True)
+    (sparse_dir / "cameras.txt").write_text("1 PINHOLE 100 100 50 50 50 50\n")
+    (sparse_dir / "images.txt").write_text("1 1 0 0 0 0 0 0 1 00000.png\n\n")
+    (sparse_dir / "points3D.txt").write_text("1 0 0 0 255 255 255 0.1\n")
+    images_dir = output_dir / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+    (images_dir / "00000.png").write_bytes(b"fake")
+
+
 def test_run_alignment_raises_when_binary_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(realityscan.shutil, "which", lambda name: None)
     monkeypatch.setattr(realityscan, "_EPIC_GAMES_DIR", tmp_path)
@@ -36,6 +47,34 @@ def test_realityscan_binary_falls_back_to_epic_games_install(tmp_path, monkeypat
     assert binary == str(fake_exe)
 
 
+def test_run_alignment_uses_bundled_colmap_export_params(tmp_path, monkeypatch):
+    # The exact command shape (-exportRegistration <target> <params.xml>) was
+    # verified empirically against the real installed binary: with this
+    # bundled params.xml (calexFileFormat=COLMAP), RealityScan writes
+    # sparse/0/{cameras,images,points3D}.txt and images/ as siblings of the
+    # given target's parent directory, regardless of the target's own name.
+    monkeypatch.setattr(realityscan.shutil, "which", lambda name: "C:/fake/RealityScan.exe")
+    monkeypatch.setattr(realityscan.time, "sleep", lambda _: None)
+
+    output_dir = tmp_path / "out"
+    captured_command = {}
+
+    def fake_popen(command, stdout, stderr, text):
+        captured_command["command"] = command
+        _write_fake_colmap_output(output_dir)
+        return _fake_process(0, "aligned ok")
+
+    monkeypatch.setattr(realityscan.subprocess, "Popen", fake_popen)
+
+    realityscan.run_alignment(tmp_path / "frames", output_dir)
+
+    command = captured_command["command"]
+    assert "-exportRegistration" in command
+    export_index = command.index("-exportRegistration")
+    assert command[export_index + 2] == str(realityscan._COLMAP_EXPORT_PARAMS)
+    assert realityscan._COLMAP_EXPORT_PARAMS.is_file()
+
+
 def test_run_alignment_returns_result_on_success(tmp_path, monkeypatch):
     monkeypatch.setattr(realityscan.shutil, "which", lambda name: "C:/fake/RealityScan.exe")
     monkeypatch.setattr(realityscan.time, "sleep", lambda _: None)
@@ -43,17 +82,15 @@ def test_run_alignment_returns_result_on_success(tmp_path, monkeypatch):
     output_dir = tmp_path / "out"
 
     def fake_popen(command, stdout, stderr, text):
-        output_dir.mkdir(parents=True, exist_ok=True)
-        (output_dir / "registration.csv").write_text("frame_001.jpg\n")
-        (output_dir / "points.ply").write_bytes(b"fake ply")
+        _write_fake_colmap_output(output_dir)
         return _fake_process(0, "aligned ok")
 
     monkeypatch.setattr(realityscan.subprocess, "Popen", fake_popen)
 
     result = realityscan.run_alignment(tmp_path / "frames", output_dir)
 
-    assert result.registration_path == output_dir / "registration.csv"
-    assert result.point_cloud_path == output_dir / "points.ply"
+    assert result.sparse_dir == output_dir / "sparse" / "0"
+    assert result.images_dir == output_dir / "images"
     assert "aligned ok" in result.log
 
 
@@ -94,9 +131,7 @@ def test_run_alignment_reports_progress_from_progress_file(tmp_path, monkeypatch
     process.wait = MagicMock(return_value=0)
 
     def fake_popen(command, stdout, stderr, text):
-        output_dir.mkdir(parents=True, exist_ok=True)
-        (output_dir / "registration.csv").write_text("frame_001.jpg\n")
-        (output_dir / "points.ply").write_bytes(b"fake ply")
+        _write_fake_colmap_output(output_dir)
         return process
 
     monkeypatch.setattr(realityscan.subprocess, "Popen", fake_popen)

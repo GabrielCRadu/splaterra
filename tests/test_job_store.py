@@ -71,16 +71,16 @@ def test_list_stages_empty_for_job_with_no_stages(job_store):
     assert job_store.list_stages(job.id) == []
 
 
-def test_update_job_sets_registration_and_point_cloud_paths(job_store):
+def test_update_job_sets_colmap_sparse_and_undistorted_images_dirs(job_store):
     job = job_store.create_job("Test")
     job_store.update_job(
         job.id,
-        registration_path="/data/alignment/registration.csv",
-        point_cloud_path="/data/alignment/points.ply",
+        colmap_sparse_dir="/data/alignment/sparse/0",
+        undistorted_images_dir="/data/alignment/images",
     )
     fetched = job_store.get_job(job.id)
-    assert fetched.registration_path == "/data/alignment/registration.csv"
-    assert fetched.point_cloud_path == "/data/alignment/points.ply"
+    assert fetched.colmap_sparse_dir == "/data/alignment/sparse/0"
+    assert fetched.undistorted_images_dir == "/data/alignment/images"
 
 
 def test_upsert_stage_sets_and_preserves_progress_percent(job_store):

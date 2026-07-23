@@ -46,8 +46,8 @@ def compute_alignment(store: JobStore, job_id: str) -> AlignmentResult:
 
     store.update_job(
         job_id,
-        registration_path=str(result.registration_path),
-        point_cloud_path=str(result.point_cloud_path),
+        colmap_sparse_dir=str(result.sparse_dir),
+        undistorted_images_dir=str(result.images_dir),
     )
     store.upsert_stage(job_id, "alignment", "done", finished_at=_now(), log=result.log)
     return result

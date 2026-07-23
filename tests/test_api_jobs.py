@@ -67,9 +67,9 @@ def test_get_job_includes_alignment_fields(client):
     job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
     response = client.get(f"/jobs/{job_id}")
     body = response.json()
-    assert "registration_path" in body
-    assert "point_cloud_path" in body
-    assert body["registration_path"] is None
+    assert "colmap_sparse_dir" in body
+    assert "undistorted_images_dir" in body
+    assert body["colmap_sparse_dir"] is None
 
 
 def test_delete_job_removes_job_and_its_files(client):
