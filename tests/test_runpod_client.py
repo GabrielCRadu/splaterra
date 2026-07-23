@@ -29,6 +29,22 @@ def test_create_gpu_pod_raises_when_no_id_returned(monkeypatch):
         runpod_client.create_gpu_pod("test", image_name="img", gpu_type_id="gpu")
 
 
+def test_create_gpu_pod_wraps_sdk_errors_as_runpod_error(monkeypatch):
+    # Real-world case observed live: RunPod's SDK raises its own
+    # runpod.error.QueryError (e.g. "account balance is too low"), which is
+    # not a RunPodError - callers up the stack (cloud_job.run_cloud_job) only
+    # catch RunPodError, so an unwrapped SDK exception would escape uncaught.
+    monkeypatch.setenv("RUNPOD_API_KEY", "fake-key")
+    monkeypatch.setattr(
+        runpod_client.runpod,
+        "create_pod",
+        MagicMock(side_effect=RuntimeError("account balance is too low")),
+    )
+
+    with pytest.raises(RunPodError, match="account balance is too low"):
+        runpod_client.create_gpu_pod("test", image_name="img", gpu_type_id="gpu")
+
+
 def test_wait_for_pod_ready_returns_connection_once_ssh_port_mapped(monkeypatch):
     monkeypatch.setenv("RUNPOD_API_KEY", "fake-key")
     ready_pod = {
@@ -83,6 +99,16 @@ def test_wait_for_pod_ready_raises_on_timeout(monkeypatch):
         runpod_client.wait_for_pod_ready("pod-123", timeout_seconds=30, poll_interval_seconds=0)
 
 
+def test_wait_for_pod_ready_wraps_sdk_errors_as_runpod_error(monkeypatch):
+    monkeypatch.setenv("RUNPOD_API_KEY", "fake-key")
+    monkeypatch.setattr(
+        runpod_client.runpod, "get_pod", MagicMock(side_effect=RuntimeError("network unreachable"))
+    )
+
+    with pytest.raises(RunPodError, match="network unreachable"):
+        runpod_client.wait_for_pod_ready("pod-123", timeout_seconds=30)
+
+
 def test_terminate_pod_calls_sdk(monkeypatch):
     monkeypatch.setenv("RUNPOD_API_KEY", "fake-key")
     mock_terminate = MagicMock()
@@ -91,3 +117,13 @@ def test_terminate_pod_calls_sdk(monkeypatch):
     runpod_client.terminate_pod("pod-123")
 
     mock_terminate.assert_called_once_with("pod-123")
+
+
+def test_terminate_pod_wraps_sdk_errors_as_runpod_error(monkeypatch):
+    monkeypatch.setenv("RUNPOD_API_KEY", "fake-key")
+    monkeypatch.setattr(
+        runpod_client.runpod, "terminate_pod", MagicMock(side_effect=RuntimeError("gateway timeout"))
+    )
+
+    with pytest.raises(RunPodError, match="gateway timeout"):
+        runpod_client.terminate_pod("pod-123")

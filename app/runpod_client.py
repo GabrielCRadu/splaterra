@@ -37,17 +37,20 @@ def create_gpu_pod(
     volume_in_gb: int = 0,
 ) -> str:
     runpod.api_key = _api_key()
-    pod = runpod.create_pod(
-        name,
-        image_name,
-        gpu_type_id,
-        cloud_type="ALL",
-        support_public_ip=True,
-        start_ssh=True,
-        container_disk_in_gb=container_disk_in_gb,
-        volume_in_gb=volume_in_gb,
-        ports="22/tcp",
-    )
+    try:
+        pod = runpod.create_pod(
+            name,
+            image_name,
+            gpu_type_id,
+            cloud_type="ALL",
+            support_public_ip=True,
+            start_ssh=True,
+            container_disk_in_gb=container_disk_in_gb,
+            volume_in_gb=volume_in_gb,
+            ports="22/tcp",
+        )
+    except Exception as exc:
+        raise RunPodError(f"Failed to create RunPod pod: {exc}") from exc
     pod_id = pod.get("id")
     if not pod_id:
         raise RunPodError(f"RunPod did not return a pod id: {pod}")
@@ -60,7 +63,10 @@ def wait_for_pod_ready(
     runpod.api_key = _api_key()
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
-        pod = runpod.get_pod(pod_id)
+        try:
+            pod = runpod.get_pod(pod_id)
+        except Exception as exc:
+            raise RunPodError(f"Failed to query RunPod pod {pod_id}: {exc}") from exc
         connection = _extract_ssh_connection(pod_id, pod)
         if connection is not None:
             return connection
@@ -78,4 +84,7 @@ def _extract_ssh_connection(pod_id: str, pod: dict) -> PodConnection | None:
 
 def terminate_pod(pod_id: str) -> None:
     runpod.api_key = _api_key()
-    runpod.terminate_pod(pod_id)
+    try:
+        runpod.terminate_pod(pod_id)
+    except Exception as exc:
+        raise RunPodError(f"Failed to terminate RunPod pod {pod_id}: {exc}") from exc
