@@ -40,6 +40,26 @@ def test_frames_page_contains_frame_grid(client):
     assert 'id="frame-grid"' in response.text
 
 
+def test_frames_page_marks_images_loaded_on_load_event(client):
+    response = client.get("/frames.html")
+    assert response.status_code == 200
+    assert "classList.add(\"loaded\")" in response.text
+    assert "addEventListener(\"load\"" in response.text
+
+
+def test_css_disables_mobile_tap_highlight(client):
+    response = client.get("/css/app.css")
+    assert response.status_code == 200
+    assert "-webkit-tap-highlight-color: transparent" in response.text
+
+
+def test_css_frame_shimmer_respects_reduced_motion(client):
+    response = client.get("/css/app.css")
+    assert response.status_code == 200
+    assert "frame-shimmer" in response.text
+    assert "prefers-reduced-motion" in response.text
+
+
 def test_recommendation_page_served(client):
     response = client.get("/recommendation.html")
     assert response.status_code == 200

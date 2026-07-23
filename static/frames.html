@@ -28,6 +28,19 @@
           `<div class="frame-cell"><img src="/jobs/${jobId}/frames/${encodeURIComponent(name)}" loading="lazy" /></div>`
       )
       .join("");
+
+    grid.querySelectorAll("img").forEach((img) => {
+      const markLoaded = () => {
+        img.classList.add("loaded");
+        img.parentElement.classList.add("loaded");
+      };
+      if (img.complete) {
+        markLoaded();
+      } else {
+        img.addEventListener("load", markLoaded);
+        img.addEventListener("error", markLoaded);
+      }
+    });
   }
 
   loadFrames();
