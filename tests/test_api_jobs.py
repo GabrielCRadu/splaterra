@@ -70,3 +70,41 @@ def test_get_job_includes_alignment_fields(client):
     assert "registration_path" in body
     assert "point_cloud_path" in body
     assert body["registration_path"] is None
+
+
+def test_delete_job_removes_job_and_its_files(client):
+    from app.paths import job_dir
+
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+
+    directory = job_dir(job_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "marker.txt").write_text("data")
+
+    response = client.delete(f"/jobs/{job_id}")
+    assert response.status_code == 204
+
+    assert client.get(f"/jobs/{job_id}").status_code == 404
+    assert not directory.exists()
+
+
+def test_delete_job_unknown_returns_404(client):
+    response = client.delete("/jobs/does-not-exist")
+    assert response.status_code == 404
+
+
+def test_delete_job_blocked_while_stage_running(client):
+    from app import db
+    from app.job_store import JobStore
+
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+
+    conn = db.connect()
+    JobStore(conn).upsert_stage(job_id, "alignment", "running")
+    conn.close()
+
+    response = client.delete(f"/jobs/{job_id}")
+    assert response.status_code == 409
+
+    # job must still exist - blocked deletion is not a partial deletion
+    assert client.get(f"/jobs/{job_id}").status_code == 200

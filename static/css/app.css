@@ -6,6 +6,7 @@
   --accent-green: #30D158;
   --accent-orange: #FF9F0A;
   --accent-gray: #98989d;
+  --accent-red: #FF453A;
 }
 
 * { box-sizing: border-box; }
@@ -93,3 +94,54 @@ input[type="text"], input[type="file"] {
 .frame-cell img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .empty { color: var(--ink-dim); font-size: 13px; text-align: center; padding: 24px 0; }
+
+.job-list-row { display: flex; align-items: center; }
+.job-list-row + .job-list-row { border-top: 1px solid var(--hairline); }
+.job-list-row .job-row { flex: 1; }
+
+.job-delete-btn {
+  background: none;
+  border: none;
+  color: var(--ink-dim);
+  font-size: 18px;
+  line-height: 1;
+  padding: 10px;
+  margin-right: 4px;
+  cursor: pointer;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.job-delete-btn:active { background: rgba(255, 69, 58, 0.12); color: var(--accent-red); }
+
+.btn-danger {
+  display: block;
+  background: rgba(255, 69, 58, 0.16);
+  color: var(--accent-red);
+  text-align: center; font-weight: 650; font-size: 14.5px;
+  padding: 14px; border-radius: 18px;
+  border: 1px solid rgba(255, 69, 58, 0.3);
+  width: 100%; cursor: pointer;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 100;
+}
+.modal-card {
+  background: linear-gradient(180deg, #1a1a1c 0%, #131315 100%);
+  border: 1px solid var(--hairline);
+  border-radius: 22px;
+  padding: 20px;
+  max-width: 400px;
+  width: 100%;
+}
+.modal-title { font-size: 16px; font-weight: 650; margin-bottom: 6px; }
+.modal-body { font-size: 13.5px; color: var(--ink-dim); margin-bottom: 18px; line-height: 1.5; }
+.modal-actions { display: flex; gap: 10px; }
+.modal-actions .btn-danger, .modal-actions .btn-ghost { margin-top: 0; }

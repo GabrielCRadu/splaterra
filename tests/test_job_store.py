@@ -13,6 +13,16 @@ def test_list_jobs_returns_newest_first(job_store):
     assert [job.id for job in jobs] == [second.id, first.id]
 
 
+def test_delete_job_removes_job_and_its_stages(job_store):
+    job = job_store.create_job("Test")
+    job_store.upsert_stage(job.id, "ingestion", "done")
+
+    job_store.delete_job(job.id)
+
+    assert job_store.get_job(job.id) is None
+    assert job_store.get_stage(job.id, "ingestion") is None
+
+
 def test_update_job_sets_fields(job_store):
     job = job_store.create_job("Test")
     job_store.update_job(job.id, raw_video_path="/data/raw/video.mp4", frame_count=42)

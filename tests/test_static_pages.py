@@ -9,6 +9,16 @@ def test_index_page_contains_job_list_and_new_job_link(client):
     assert "/js/app.js" in response.text
 
 
+def test_index_page_contains_delete_confirmation_modal(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert 'id="delete-modal"' in response.text
+    assert 'id="confirm-delete-btn"' in response.text
+    assert 'id="cancel-delete-btn"' in response.text
+    # Delete button must come before Cancel in the DOM (left/right per app.css flex order)
+    assert response.text.index('id="confirm-delete-btn"') < response.text.index('id="cancel-delete-btn"')
+
+
 def test_new_job_page_contains_local_and_upload_forms(client):
     response = client.get("/new-job.html")
     assert response.status_code == 200

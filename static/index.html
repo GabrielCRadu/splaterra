@@ -14,6 +14,17 @@
 
 <a class="btn" href="/new-job.html">+ Job nou</a>
 
+<div class="modal-overlay" id="delete-modal" style="display:none;">
+  <div class="modal-card">
+    <div class="modal-title">Stergi job-ul?</div>
+    <div class="modal-body" id="delete-modal-text"></div>
+    <div class="modal-actions">
+      <button class="btn-danger" id="confirm-delete-btn">Sterge</button>
+      <button class="btn-ghost" id="cancel-delete-btn">Anuleaza</button>
+    </div>
+  </div>
+</div>
+
 <script src="/js/app.js"></script>
 <script>
   const STAGE_LABELS = {
@@ -53,19 +64,67 @@
       jobs.map(async (job) => {
         const stages = await apiGet(`/jobs/${job.id}/stages`);
         return `
-          <a class="job-row" href="/job.html?id=${job.id}">
-            <div class="job-thumb">&#127916;</div>
-            <div class="job-info">
-              <div class="job-name">${escapeHtml(job.name)}</div>
-              <div class="job-meta">${new Date(job.created_at).toLocaleString("ro-RO")}</div>
-            </div>
-            ${stagePill(stages)}
-          </a>
+          <div class="job-list-row">
+            <a class="job-row" href="/job.html?id=${job.id}">
+              <div class="job-thumb">&#127916;</div>
+              <div class="job-info">
+                <div class="job-name">${escapeHtml(job.name)}</div>
+                <div class="job-meta">${new Date(job.created_at).toLocaleString("ro-RO")}</div>
+              </div>
+              ${stagePill(stages)}
+            </a>
+            <button
+              class="job-delete-btn"
+              data-job-id="${job.id}"
+              data-job-name="${escapeHtml(job.name)}"
+              aria-label="Sterge job"
+            >&#128465;&#65039;</button>
+          </div>
         `;
       })
     );
     list.innerHTML = `<div class="card" style="padding:0;">${rows.join("")}</div>`;
+
+    list.querySelectorAll(".job-delete-btn").forEach((btn) => {
+      btn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        showDeleteModal(btn.dataset.jobId, btn.dataset.jobName);
+      });
+    });
   }
+
+  let jobIdPendingDelete = null;
+
+  function showDeleteModal(jobId, jobName) {
+    jobIdPendingDelete = jobId;
+    document.getElementById("delete-modal-text").textContent =
+      `"${jobName}" si toate fisierele lui (video, cadre, rezultate) vor fi sterse definitiv. Nu se poate anula.`;
+    document.getElementById("delete-modal").style.display = "flex";
+  }
+
+  function hideDeleteModal() {
+    jobIdPendingDelete = null;
+    document.getElementById("delete-modal").style.display = "none";
+  }
+
+  document.getElementById("cancel-delete-btn").addEventListener("click", hideDeleteModal);
+
+  document.getElementById("confirm-delete-btn").addEventListener("click", async () => {
+    const jobId = jobIdPendingDelete;
+    if (!jobId) return;
+    hideDeleteModal();
+
+    const response = await fetch(`/jobs/${jobId}`, { method: "DELETE" });
+    if (!response.ok && response.status !== 404) {
+      alert(
+        response.status === 409
+          ? "Job-ul are o etapa in curs de rulare - asteapta sa se termine inainte sa il stergi."
+          : "Nu am putut sterge job-ul."
+      );
+    }
+    loadJobs();
+  });
 
   loadJobs();
 </script>

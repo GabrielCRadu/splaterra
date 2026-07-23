@@ -76,6 +76,11 @@ class JobStore:
         ).fetchone()
         return self._row_to_stage(row) if row else None
 
+    def delete_job(self, job_id: str) -> None:
+        self._conn.execute("DELETE FROM job_stages WHERE job_id = ?", (job_id,))
+        self._conn.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+        self._conn.commit()
+
     def list_stages(self, job_id: str) -> list[JobStage]:
         rows = self._conn.execute(
             "SELECT * FROM job_stages WHERE job_id = ? ORDER BY id", (job_id,)

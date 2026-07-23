@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+import shutil
+
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 
 from app.deps import get_job_store
 from app.job_store import JobStore
+from app.paths import job_dir
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -53,6 +56,20 @@ def get_job(job_id: str, store: JobStore = Depends(get_job_store)) -> JobRespons
 @router.get("", response_model=list[JobResponse])
 def list_jobs(store: JobStore = Depends(get_job_store)) -> list[JobResponse]:
     return [JobResponse(**job.__dict__) for job in store.list_jobs()]
+
+
+@router.delete("/{job_id}", status_code=204)
+def delete_job(job_id: str, store: JobStore = Depends(get_job_store)) -> Response:
+    if store.get_job(job_id) is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if any(stage.status == "running" for stage in store.list_stages(job_id)):
+        raise HTTPException(status_code=409, detail="Cannot delete a job with a stage still running")
+
+    store.delete_job(job_id)
+    directory = job_dir(job_id)
+    if directory.is_dir():
+        shutil.rmtree(directory)
+    return Response(status_code=204)
 
 
 @router.get("/{job_id}/stages", response_model=list[JobStageResponse])
