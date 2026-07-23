@@ -68,7 +68,7 @@
         const stages = await apiGet(`/jobs/${job.id}/stages`);
         return `
           <div class="job-list-row" data-job-id="${job.id}" data-job-name="${escapeHtml(job.name)}">
-            <a class="job-row" href="/job.html?id=${job.id}">
+            <a class="job-row" href="/job.html?id=${job.id}" draggable="false">
               <div class="job-thumb">&#127916;</div>
               <div class="job-info">
                 <div class="job-name">${escapeHtml(job.name)}</div>
@@ -118,6 +118,12 @@
   }
 
   function attachRowGestures(row, jobId, jobName) {
+    // Prevent the browser's native long-press context menu (Open in new tab,
+    // Copy link, etc.) from appearing over the link during our own
+    // press-and-hold gesture - this fires on Android Chrome; iOS Safari's
+    // equivalent link callout is suppressed via -webkit-touch-callout in CSS.
+    row.addEventListener("contextmenu", (event) => event.preventDefault());
+
     row.addEventListener("pointerdown", (event) => {
       if (event.button !== undefined && event.button !== 0) return;
 

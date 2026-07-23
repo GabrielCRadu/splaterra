@@ -31,6 +31,13 @@ def test_index_page_contains_jiggle_drag_delete_controls(client):
     assert "job-delete-btn" not in response.text
 
 
+def test_index_page_suppresses_native_long_press_context_menu(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert '"contextmenu"' in response.text
+    assert 'draggable="false"' in response.text
+
+
 def test_new_job_page_contains_local_and_upload_forms(client):
     response = client.get("/new-job.html")
     assert response.status_code == 200

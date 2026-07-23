@@ -137,7 +137,12 @@ select { appearance: none; -webkit-appearance: none; }
   -webkit-touch-callout: none;
 }
 .job-list-row + .job-list-row { border-top: 1px solid var(--hairline); }
-.job-list-row .job-row { flex: 1; }
+.job-list-row .job-row {
+  flex: 1;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
 
 @keyframes jiggle {
   0% { transform: rotate(-1deg); }
