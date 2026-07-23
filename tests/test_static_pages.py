@@ -78,6 +78,15 @@ def test_alignment_page_served(client):
     assert 'id="content"' in response.text
 
 
+def test_job_page_contains_extraction_settings_panel(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert 'id="extract-fps"' in response.text
+    assert 'id="extract-num-frames"' in response.text
+    assert 'id="extract-method"' in response.text
+    assert 'id="btn-extract-settings-toggle"' in response.text
+
+
 def test_job_page_restarts_polling_after_each_action():
     # Regression test: polling used to be a one-shot pollStages() call that
     # permanently stopped itself once no stage was "running". If a user

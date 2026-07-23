@@ -33,6 +33,12 @@
           </div>
         </div>
         <div class="card">
+          <div class="job-name" style="margin-bottom:8px;">Extragere cadre</div>
+          <div class="job-meta">Fps esantionare: ${rec.extraction.fps}</div>
+          <div class="job-meta">Numar cadre finale: ${rec.extraction.num_frames}</div>
+          <div class="job-meta">Metoda: ${escapeHtml(rec.extraction.selection_method)}</div>
+        </div>
+        <div class="card">
           <div class="job-name" style="margin-bottom:8px;">RealityScan</div>
           <div class="job-meta">Downscale: 1/${rec.realityscan.downscale}</div>
           <div class="job-meta">Rolling-shutter correction: ${rec.realityscan.rolling_shutter_correction ? "activ" : "inactiv"}</div>
