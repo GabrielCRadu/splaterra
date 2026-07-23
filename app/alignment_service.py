@@ -34,7 +34,7 @@ def compute_alignment(store: JobStore, job_id: str) -> AlignmentResult:
     store.upsert_stage(job_id, "alignment", "running", started_at=_now())
     try:
         result = run_alignment(Path(job.frames_dir), output_dir, progress_path=progress_path)
-    except RealityScanError as exc:
+    except Exception as exc:
         store.upsert_stage(job_id, "alignment", "failed", finished_at=_now(), error=str(exc))
         raise AlignmentError(str(exc)) from exc
 

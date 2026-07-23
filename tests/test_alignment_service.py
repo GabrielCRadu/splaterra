@@ -60,3 +60,19 @@ def test_compute_alignment_marks_stage_failed_on_realityscan_error(job_store, tm
     stage = job_store.get_stage(job.id, "alignment")
     assert stage.status == "failed"
     assert stage.error == "export failed"
+
+
+def test_compute_alignment_marks_stage_failed_on_non_realityscan_error(job_store, tmp_path, monkeypatch):
+    job = job_store.create_job("Test")
+    job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"))
+
+    monkeypatch.setattr(
+        alignment_service, "run_alignment", MagicMock(side_effect=OSError("disk full"))
+    )
+
+    with pytest.raises(alignment_service.AlignmentError, match="disk full"):
+        alignment_service.compute_alignment(job_store, job.id)
+
+    stage = job_store.get_stage(job.id, "alignment")
+    assert stage.status == "failed"
+    assert stage.error == "disk full"
