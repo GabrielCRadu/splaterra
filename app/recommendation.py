@@ -13,6 +13,20 @@ GAUSSIANS_PER_VRAM_GB = 400_000
 MAX_GAUSSIANS_CAP = 6_000_000
 HIGH_RES_PIXEL_THRESHOLD = 3840 * 2160
 
+EXTRACTION_MIN_FPS = 2
+EXTRACTION_MAX_FPS = 10
+EXTRACTION_MIN_FRAMES = 80
+EXTRACTION_MAX_FRAMES = 300
+EXTRACTION_SELECTION_RATIO = 0.5
+EXTRACTION_TARGET_SAMPLE_SECONDS = 300  # tuned so a 10s clip lands at EXTRACTION_MAX_FPS
+
+
+@dataclass
+class ExtractionSettings:
+    fps: int
+    num_frames: int
+    selection_method: str
+
 
 @dataclass
 class RealityScanSettings:
@@ -34,9 +48,24 @@ class Verdict:
 
 @dataclass
 class Recommendation:
+    extraction: ExtractionSettings
     realityscan: RealityScanSettings
     lichtfeld: LichtFeldSettings
     verdict: Verdict
+
+
+def recommend_extraction(video: VideoMetadata) -> ExtractionSettings:
+    duration = max(video.duration_seconds, 1.0)
+    # Sample richly for short clips, more sparsely for long ones, within a
+    # practical fps range for sharp-frames. Then select roughly half the
+    # sampled pool as "sharp enough", clamped to a sane frame-count range,
+    # and never request more frames than were actually sampled.
+    fps = int(min(EXTRACTION_MAX_FPS, max(EXTRACTION_MIN_FPS, round(EXTRACTION_TARGET_SAMPLE_SECONDS / duration))))
+    total_sampled = duration * fps
+    target = round(total_sampled * EXTRACTION_SELECTION_RATIO)
+    num_frames = int(min(EXTRACTION_MAX_FRAMES, max(EXTRACTION_MIN_FRAMES, target)))
+    num_frames = min(num_frames, int(total_sampled))
+    return ExtractionSettings(fps=fps, num_frames=num_frames, selection_method="best-n")
 
 
 def recommend(
@@ -44,6 +73,8 @@ def recommend(
     drone: DroneTelemetry | None,
     hardware: HardwareInfo,
 ) -> Recommendation:
+    extraction = recommend_extraction(video)
+
     is_high_res = video.width * video.height > HIGH_RES_PIXEL_THRESHOLD
     realityscan = RealityScanSettings(
         downscale=2 if is_high_res else 1,
@@ -58,7 +89,9 @@ def recommend(
 
     verdict = _decide_verdict(gpu, vram_gb)
 
-    return Recommendation(realityscan=realityscan, lichtfeld=lichtfeld, verdict=verdict)
+    return Recommendation(
+        extraction=extraction, realityscan=realityscan, lichtfeld=lichtfeld, verdict=verdict
+    )
 
 
 def _decide_verdict(gpu: GpuInfo | None, vram_gb: float) -> Verdict:

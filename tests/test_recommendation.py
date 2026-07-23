@@ -1,6 +1,6 @@
 from app.drone_telemetry import DroneTelemetry
 from app.hardware import GpuInfo, HardwareInfo
-from app.recommendation import recommend
+from app.recommendation import recommend, recommend_extraction
 from app.video_metadata import VideoMetadata
 
 VIDEO_1080P = VideoMetadata(width=1920, height=1080, fps=30.0, duration_seconds=10.0, codec="h264")
@@ -87,3 +87,38 @@ def test_max_gaussians_capped_for_very_high_vram():
     )
     rec = recommend(VIDEO_1080P, NO_DRONE, huge_gpu_hw)
     assert rec.lichtfeld.max_gaussians == 6_000_000
+
+
+def test_recommend_extraction_short_clip_uses_max_fps_and_min_frames():
+    video = VideoMetadata(width=1920, height=1080, fps=30.0, duration_seconds=10.0, codec="h264")
+    settings = recommend_extraction(video)
+    assert settings.fps == 10
+    assert settings.num_frames == 80
+    assert settings.selection_method == "best-n"
+
+
+def test_recommend_extraction_very_short_clip_caps_frames_to_what_exists():
+    video = VideoMetadata(width=1920, height=1080, fps=30.0, duration_seconds=2.0, codec="h264")
+    settings = recommend_extraction(video)
+    assert settings.fps == 10
+    # only ~20 frames actually get sampled at 10fps over 2s - never ask for more than that
+    assert settings.num_frames == 20
+
+
+def test_recommend_extraction_medium_clip_scales_down_fps():
+    video = VideoMetadata(width=1920, height=1080, fps=30.0, duration_seconds=60.0, codec="h264")
+    settings = recommend_extraction(video)
+    assert settings.fps == 5
+    assert settings.num_frames == 150
+
+
+def test_recommend_extraction_long_clip_uses_min_fps_and_caps_frames():
+    video = VideoMetadata(width=1920, height=1080, fps=30.0, duration_seconds=300.0, codec="h264")
+    settings = recommend_extraction(video)
+    assert settings.fps == 2
+    assert settings.num_frames == 300
+
+
+def test_recommend_included_in_full_recommendation():
+    rec = recommend(VIDEO_1080P, NO_DRONE, STRONG_GPU_HW)
+    assert rec.extraction == recommend_extraction(VIDEO_1080P)

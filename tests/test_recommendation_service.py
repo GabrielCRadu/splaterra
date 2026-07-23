@@ -6,10 +6,17 @@ import pytest
 from app import recommendation_service
 from app.drone_telemetry import SrtParseError
 from app.hardware import HardwareInfo
-from app.recommendation import LichtFeldSettings, Recommendation, RealityScanSettings, Verdict
+from app.recommendation import (
+    ExtractionSettings,
+    LichtFeldSettings,
+    Recommendation,
+    RealityScanSettings,
+    Verdict,
+)
 from app.video_metadata import VideoMetadata, VideoMetadataError
 
 FAKE_RECOMMENDATION = Recommendation(
+    extraction=ExtractionSettings(fps=10, num_frames=200, selection_method="best-n"),
     realityscan=RealityScanSettings(downscale=1, rolling_shutter_correction=False),
     lichtfeld=LichtFeldSettings(max_gaussians=1_000_000, bf16=True),
     verdict=Verdict(use_cloud=False, reason="Local GPU meets LichtFeld's minimum requirements"),
