@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 _EPIC_GAMES_DIR = Path(r"C:\Program Files\Epic Games")
+_PROGRESS_LINE_RE = re.compile(r"^\d+\s+([\d.]+)\s+")
 
 
 class RealityScanError(Exception):
@@ -32,12 +36,25 @@ def _realityscan_binary() -> str:
     )
 
 
+def _latest_progress_percent(progress_path: Path) -> float | None:
+    try:
+        lines = progress_path.read_text(errors="ignore").strip().splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        match = _PROGRESS_LINE_RE.match(line)
+        if match:
+            return float(match.group(1)) * 100
+    return None
+
+
 def run_alignment(
     frames_dir: Path,
     output_dir: Path,
     *,
     progress_path: Path | None = None,
     timeout_seconds: int = 600,
+    on_progress: Callable[[float], None] | None = None,
 ) -> AlignmentResult:
     binary = _realityscan_binary()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -72,21 +89,32 @@ def run_alignment(
         "-quit",
     ]
 
-    try:
-        process = subprocess.run(
-            command, capture_output=True, text=True, check=False, timeout=timeout_seconds
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise RealityScanError(
-            f"RealityScan did not finish within {timeout_seconds}s and was terminated"
-        ) from exc
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    deadline = time.monotonic() + timeout_seconds
+    last_reported: float | None = None
 
-    log = process.stdout + process.stderr
+    while process.poll() is None:
+        if time.monotonic() > deadline:
+            process.kill()
+            process.wait()
+            raise RealityScanError(
+                f"RealityScan did not finish within {timeout_seconds}s and was terminated"
+            )
+        if progress_path is not None and on_progress is not None and progress_path.is_file():
+            percent = _latest_progress_percent(progress_path)
+            if percent is not None and percent != last_reported:
+                on_progress(percent)
+                last_reported = percent
+        time.sleep(1.0)
+
+    returncode = process.returncode
+    stdout_text = process.stdout.read() if process.stdout is not None else ""
+    log = stdout_text
     if progress_path is not None and progress_path.is_file():
         log += "\n--- progress ---\n" + progress_path.read_text(errors="ignore")
 
-    if process.returncode != 0:
-        raise RealityScanError(f"RealityScan exited with {process.returncode}:\n{log}")
+    if returncode != 0:
+        raise RealityScanError(f"RealityScan exited with {returncode}:\n{log}")
 
     if not registration_path.is_file() or not point_cloud_path.is_file():
         raise RealityScanError(f"RealityScan did not produce expected output files:\n{log}")
