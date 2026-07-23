@@ -93,3 +93,18 @@ def test_run_cloud_job_logs_but_does_not_raise_when_termination_itself_fails(tmp
 
     assert result.pod_id == "pod-123"
     assert "may still be running and billing" in caplog.text
+
+
+def test_run_cloud_job_logs_but_does_not_raise_when_termination_raises_unexpected_error(tmp_path, monkeypatch, caplog):
+    _patch_happy_path(monkeypatch)
+    monkeypatch.setattr(
+        cloud_job, "terminate_pod", MagicMock(side_effect=ConnectionError("network unreachable"))
+    )
+
+    with caplog.at_level("ERROR"):
+        result = cloud_job.run_cloud_job(
+            tmp_path / "input", tmp_path / "output", "train.sh", image_name="img", gpu_type_id="gpu"
+        )
+
+    assert result.pod_id == "pod-123"
+    assert "may still be running and billing" in caplog.text

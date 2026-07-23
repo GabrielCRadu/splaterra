@@ -50,7 +50,7 @@ def run_cloud_job(
     finally:
         try:
             terminate_pod(pod_id)
-        except RunPodError:
+        except Exception:
             logger.exception(
                 "Failed to terminate RunPod pod %s - it may still be running and billing. "
                 "Terminate it manually from the RunPod dashboard.",
