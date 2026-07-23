@@ -5,7 +5,7 @@ from pathlib import Path
 
 from app.job_store import JobStore
 from app.paths import frames_dir
-from app.sharp_frames import ExtractionResult, SharpFramesError, run_extraction
+from app.sharp_frames import ExtractionResult, run_extraction
 
 
 class ExtractionError(Exception):
@@ -53,7 +53,7 @@ def extract_frames(
             fps=fps,
             on_progress=report_progress,
         )
-    except SharpFramesError as exc:
+    except Exception as exc:
         store.upsert_stage(job_id, "frame_extraction", "failed", finished_at=_now(), error=str(exc))
         raise ExtractionError(str(exc)) from exc
 
