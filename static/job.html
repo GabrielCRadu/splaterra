@@ -96,30 +96,40 @@
     updateActions(stages);
   }
 
+  function startPolling() {
+    return pollStages(jobId, (stages) => {
+      renderStages(stages);
+      updateActions(stages);
+      const anyRunning = stages.some((s) => s.status === "running");
+      if (stages.length > 0 && !anyRunning) {
+        stopPolling();
+      }
+    });
+  }
+
   document.getElementById("btn-extract").addEventListener("click", async () => {
     await apiPost(`/jobs/${jobId}/extract-frames`, {});
     refresh();
+    stopPolling();
+    stopPolling = startPolling();
   });
 
   document.getElementById("btn-align").addEventListener("click", async () => {
     await apiPost(`/jobs/${jobId}/align`, {});
     refresh();
+    stopPolling();
+    stopPolling = startPolling();
   });
 
   document.getElementById("btn-recommend").addEventListener("click", async () => {
     await apiPost(`/jobs/${jobId}/recommend`, {});
     refresh();
+    stopPolling();
+    stopPolling = startPolling();
   });
 
   refresh();
-  const stopPolling = pollStages(jobId, (stages) => {
-    renderStages(stages);
-    updateActions(stages);
-    const anyRunning = stages.some((s) => s.status === "running");
-    if (stages.length > 0 && !anyRunning) {
-      stopPolling();
-    }
-  });
+  let stopPolling = startPolling();
 </script>
 </body>
 </html>

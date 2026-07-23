@@ -1,3 +1,6 @@
+from pathlib import Path
+
+
 def test_index_page_contains_job_list_and_new_job_link(client):
     response = client.get("/")
     assert response.status_code == 200
@@ -43,3 +46,19 @@ def test_alignment_page_served(client):
     response = client.get("/alignment.html")
     assert response.status_code == 200
     assert 'id="content"' in response.text
+
+
+def test_job_page_restarts_polling_after_each_action():
+    # Regression test: polling used to be a one-shot pollStages() call that
+    # permanently stopped itself once no stage was "running". If a user
+    # started a new stage (e.g. clicked "align") after polling had already
+    # auto-stopped, the UI would show a single refresh() snapshot and then
+    # never update again, even after the background job finished - it would
+    # look stuck on "running" forever. The fix: each action button restarts
+    # polling by reassigning stopPolling = startPolling() after its apiPost.
+    content = (Path(__file__).resolve().parent.parent / "static" / "job.html").read_text(
+        encoding="utf-8"
+    )
+    # 1 initial assignment (`let stopPolling = startPolling()`) + 3 button
+    # handlers (extract/align/recommend) each reassigning it after apiPost.
+    assert content.count("stopPolling = startPolling()") == 4
