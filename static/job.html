@@ -45,6 +45,15 @@
     recommendation: "Recomandare",
   };
 
+  function progressBarHtml(stage) {
+    if (stage.status !== "running") return "";
+    if (stage.progress_percent !== null && stage.progress_percent !== undefined) {
+      const pct = Math.max(0, Math.min(100, stage.progress_percent));
+      return `<div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>`;
+    }
+    return `<div class="progress-track"><div class="progress-indeterminate"></div></div>`;
+  }
+
   function renderStages(stages) {
     const list = document.getElementById("stage-list");
     if (stages.length === 0) {
@@ -61,6 +70,7 @@
             <div class="job-info">
               <div class="job-name">${STAGE_LABELS[s.stage] || s.stage}</div>
               ${errorLine}
+              ${progressBarHtml(s)}
             </div>
             <span class="pill ${pillClass}">${s.status}</span>
           </div>

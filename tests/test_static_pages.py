@@ -101,3 +101,11 @@ def test_job_page_restarts_polling_after_each_action():
     # 1 initial assignment (`let stopPolling = startPolling()`) + 3 button
     # handlers (extract/align/recommend) each reassigning it after apiPost.
     assert content.count("stopPolling = startPolling()") == 4
+
+
+def test_job_page_contains_progress_bar_styles_and_render_hook(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert "progress-track" in response.text
+    assert "progress-fill" in response.text
+    assert "progress-indeterminate" in response.text
