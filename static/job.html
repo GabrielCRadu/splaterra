@@ -50,6 +50,18 @@
 <button class="btn" id="btn-train" style="display:none;">Porneste antrenarea</button>
 <a class="btn-ghost" id="link-training" style="display:none;" download>Descarca splat-ul</a>
 
+<div class="card" id="export-panel" style="display:none;">
+  <label class="settings-label" for="export-format">Exporta ca</label>
+  <select id="export-format">
+    <option value="spz">SPZ (Niantic, ~9x mai mic decat .ply)</option>
+    <option value="sog">SOG (SuperSplat, ~18x mai mic decat .ply)</option>
+    <option value="ply">PLY (original, fara compresie)</option>
+    <option value="html">HTML (viewer de sine statator)</option>
+  </select>
+  <button class="btn" id="btn-export" type="button" style="margin-top:8px;">Exporta</button>
+  <a class="btn-ghost" id="link-export" style="display:none; margin-top:8px;" download>Descarca exportul</a>
+</div>
+
 <script src="/js/app.js"></script>
 <script>
   const jobId = jobIdFromQuery();
@@ -59,6 +71,7 @@
     alignment: "Alignment",
     recommendation: "Recomandare",
     training: "Antrenare",
+    export: "Export",
   };
 
   function progressBarHtml(stage) {
@@ -167,6 +180,13 @@
     trainingLink.style.display = trainingDone ? "block" : "none";
     trainingLink.href = `/jobs/${jobId}/training/download`;
 
+    const exportDone = stageStatus(stages, "export") === "done";
+    document.getElementById("export-panel").style.display = trainingDone ? "block" : "none";
+
+    const exportLink = document.getElementById("link-export");
+    exportLink.style.display = exportDone ? "block" : "none";
+    exportLink.href = `/jobs/${jobId}/export/download`;
+
     document.getElementById("usage-panel").style.display = stages.some(
       (s) => s.status === "running"
     )
@@ -263,6 +283,14 @@
   document.getElementById("btn-train").addEventListener("click", async () => {
     const variableExposure = document.getElementById("train-variable-exposure").checked;
     await apiPost(`/jobs/${jobId}/train`, { variable_exposure: variableExposure });
+    refresh();
+    stopPolling();
+    stopPolling = startPolling();
+  });
+
+  document.getElementById("btn-export").addEventListener("click", async () => {
+    const format = document.getElementById("export-format").value;
+    await apiPost(`/jobs/${jobId}/export`, { format: format });
     refresh();
     stopPolling();
     stopPolling = startPolling();

@@ -117,9 +117,9 @@ def test_job_page_restarts_polling_after_each_action():
     content = (Path(__file__).resolve().parent.parent / "static" / "job.html").read_text(
         encoding="utf-8"
     )
-    # 1 initial assignment (`let stopPolling = startPolling()`) + 4 button
-    # handlers (extract/align/recommend/train) each reassigning it after apiPost.
-    assert content.count("stopPolling = startPolling()") == 5
+    # 1 initial assignment (`let stopPolling = startPolling()`) + 5 button
+    # handlers (extract/align/recommend/train/export) each reassigning it after apiPost.
+    assert content.count("stopPolling = startPolling()") == 6
 
 
 def test_job_page_contains_progress_bar_styles_and_render_hook(client):
@@ -159,3 +159,13 @@ def test_job_page_contains_variable_exposure_checkbox(client):
     assert response.status_code == 200
     assert 'id="train-variable-exposure"' in response.text
     assert 'type="checkbox"' in response.text
+
+
+def test_job_page_contains_export_controls(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert 'id="export-format"' in response.text
+    assert 'id="btn-export"' in response.text
+    assert 'id="link-export"' in response.text
+    assert 'value="spz"' in response.text
+    assert 'value="sog"' in response.text
