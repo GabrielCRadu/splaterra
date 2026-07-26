@@ -463,16 +463,30 @@ input[type="file"]::-webkit-file-upload-button:active {
 .story-bar {
   display: flex;
   gap: 5px;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 .story-bar-segment {
   flex: 1;
+  display: block;
+  background: none;
+  border: none;
+  padding: 7px 0;
+  margin: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.story-bar-track {
+  display: block;
   height: 4px;
   background: rgba(255, 255, 255, 0.12);
   border-radius: 100px;
   overflow: hidden;
+  outline: 1.5px solid transparent;
+  outline-offset: 3px;
+  transition: outline-color 0.2s var(--ease-spring);
 }
 .story-bar-fill {
+  display: block;
   height: 100%;
   width: 0%;
   background: linear-gradient(90deg, #24b04a 0%, var(--accent-green) 100%);
@@ -480,6 +494,7 @@ input[type="file"]::-webkit-file-upload-button:active {
   box-shadow: 0 0 10px var(--accent-green-glow);
   transition: width 0.4s var(--ease-spring);
 }
+.story-bar-segment.active .story-bar-track { outline-color: rgba(255, 255, 255, 0.85); }
 .story-bar-segment.active .story-bar-fill { box-shadow: 0 0 14px var(--accent-green-glow); }
 .story-bar-fill.indeterminate {
   width: 40%;

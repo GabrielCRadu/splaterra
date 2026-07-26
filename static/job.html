@@ -33,14 +33,21 @@
       <p class="subtitle" id="video-info-hint" style="margin:0 0 12px;"></p>
       <label class="settings-label" for="extract-fps">Cadre pe secunda esantionate (fps)</label>
       <input type="text" inputmode="numeric" id="extract-fps" />
-      <label class="settings-label" for="extract-num-frames">Numar cadre finale (cele mai clare)</label>
-      <input type="text" inputmode="numeric" id="extract-num-frames" />
       <label class="settings-label" for="extract-method">Metoda de selectie</label>
       <select id="extract-method">
         <option value="best-n">Cele mai clare (best-n)</option>
+        <option value="percent">Procent din cadre (cele mai clare, distribuite uniform)</option>
         <option value="batched">Pe loturi (batched)</option>
         <option value="outlier-removal">Elimina cadre neclare (outlier-removal)</option>
       </select>
+      <div id="extract-num-frames-row">
+        <label class="settings-label" for="extract-num-frames">Numar cadre finale (cele mai clare)</label>
+        <input type="text" inputmode="numeric" id="extract-num-frames" />
+      </div>
+      <div id="extract-percent-row" style="display:none;">
+        <label class="settings-label" for="extract-percent">Procent din cadrele esantionate</label>
+        <input type="text" inputmode="numeric" id="extract-percent" value="50" />
+      </div>
       <p class="subtitle" id="extract-settings-hint" style="margin:8px 0 12px;"></p>
       <p class="subtitle" id="recommend-status" style="margin:0 0 8px;"></p>
       <a class="btn-ghost" id="link-recommendation" style="display:none;">Vezi recomandarea</a>
@@ -116,6 +123,7 @@
   let reachableIndexCache = 0;
   let initializedView = false;
   let userNavigated = false;
+  let videoDurationSeconds = null;
   const lastStatusByStage = {};
   const expandedLogs = new Set();
 
@@ -185,18 +193,25 @@
     bar.innerHTML = STORIES.map((stage, i) => {
       const status = stageStatus(stages, stage);
       const activeClass = i === viewedIndex ? " active" : "";
+      let fillHtml;
       if (status === "done") {
-        return `<div class="story-bar-segment${activeClass}"><div class="story-bar-fill" style="width:100%"></div></div>`;
-      }
-      if (i === viewedIndex && status === "running") {
+        fillHtml = `<span class="story-bar-fill" style="width:100%"></span>`;
+      } else if (i === viewedIndex && status === "running") {
         const s = stages.find((x) => x.stage === stage);
         if (s && s.progress_percent !== null && s.progress_percent !== undefined) {
           const pct = Math.max(0, Math.min(100, s.progress_percent));
-          return `<div class="story-bar-segment${activeClass}"><div class="story-bar-fill" style="width:${pct}%"></div></div>`;
+          fillHtml = `<span class="story-bar-fill" style="width:${pct}%"></span>`;
+        } else {
+          fillHtml = `<span class="story-bar-fill indeterminate"></span>`;
         }
-        return `<div class="story-bar-segment${activeClass}"><div class="story-bar-fill indeterminate"></div></div>`;
+      } else {
+        fillHtml = `<span class="story-bar-fill" style="width:0%"></span>`;
       }
-      return `<div class="story-bar-segment${activeClass}"><div class="story-bar-fill" style="width:0%"></div></div>`;
+      return `
+        <button type="button" class="story-bar-segment${activeClass}" data-index="${i}" aria-label="${STAGE_LABELS[stage]}">
+          <span class="story-bar-track">${fillHtml}</span>
+        </button>
+      `;
     }).join("");
   }
 
@@ -385,17 +400,30 @@
     document.getElementById("extract-num-frames").value = extraction.num_frames;
     document.getElementById("extract-method").value = extraction.selection_method;
     extractMethodSelect.sync();
+    updateExtractFieldVisibility();
     document.getElementById("extract-settings-hint").textContent = hint;
 
     const videoInfoHint = document.getElementById("video-info-hint");
     try {
       const info = await apiGet(`/jobs/${jobId}/video-info`);
+      videoDurationSeconds = info.duration_seconds;
       videoInfoHint.textContent =
         `Clip: ${info.total_frames} cadre in total, la ${info.fps.toFixed(2)} fps.`;
     } catch (err) {
+      videoDurationSeconds = null;
       videoInfoHint.textContent = "";
     }
   }
+
+  function updateExtractFieldVisibility() {
+    const method = document.getElementById("extract-method").value;
+    document.getElementById("extract-num-frames-row").style.display =
+      method === "best-n" ? "block" : "none";
+    document.getElementById("extract-percent-row").style.display =
+      method === "percent" ? "block" : "none";
+  }
+
+  document.getElementById("extract-method").addEventListener("change", updateExtractFieldVisibility);
 
   document.getElementById("btn-add-clip-upload").addEventListener("click", async () => {
     const files = Array.from(document.getElementById("add-clip-file-input").files);
@@ -453,10 +481,26 @@
 
   document.getElementById("btn-extract").addEventListener("click", async () => {
     const fps = parseInt(document.getElementById("extract-fps").value, 10) || EXTRACT_DEFAULTS.fps;
-    const numFrames =
-      parseInt(document.getElementById("extract-num-frames").value, 10) || EXTRACT_DEFAULTS.num_frames;
-    const selectionMethod =
+    const rawMethod =
       document.getElementById("extract-method").value || EXTRACT_DEFAULTS.selection_method;
+
+    let selectionMethod = rawMethod;
+    let numFrames =
+      parseInt(document.getElementById("extract-num-frames").value, 10) || EXTRACT_DEFAULTS.num_frames;
+
+    if (rawMethod === "percent") {
+      // sharp-frames has no native "percent" method - "best-n" already picks
+      // the sharpest frames first while spreading them roughly evenly (see
+      // sharp-frames' select_best_n_frames), so the percentage just needs
+      // converting into a concrete frame count using the same total-sampled
+      // estimate app/recommendation.py uses (duration * fps).
+      const percent = parseFloat(document.getElementById("extract-percent").value) || 50;
+      const totalSampled = videoDurationSeconds
+        ? Math.round(videoDurationSeconds * fps)
+        : EXTRACT_DEFAULTS.num_frames;
+      numFrames = Math.max(1, Math.round((totalSampled * percent) / 100));
+      selectionMethod = "best-n";
+    }
 
     await apiPost(`/jobs/${jobId}/extract-frames`, {
       fps: fps,
@@ -508,6 +552,12 @@
       expandedLogs.add(stageName);
     }
     renderAllSlideStatuses(lastStages);
+  });
+
+  document.getElementById("story-bar").addEventListener("click", (event) => {
+    const segment = event.target.closest(".story-bar-segment");
+    if (!segment) return;
+    goToSlide(parseInt(segment.dataset.index, 10), { isUserAction: true });
   });
 
   document.getElementById("story-viewport").addEventListener("click", (event) => {

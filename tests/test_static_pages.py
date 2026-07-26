@@ -113,6 +113,15 @@ def test_job_page_contains_extraction_settings_panel(client):
     assert 'id="extract-method"' in response.text
 
 
+def test_job_page_contains_percent_based_selection_method(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert 'value="percent"' in response.text
+    assert 'id="extract-percent"' in response.text
+    assert 'id="extract-percent-row"' in response.text
+    assert "function updateExtractFieldVisibility" in response.text
+
+
 def test_job_page_contains_video_info_hint(client):
     response = client.get("/job.html")
     assert response.status_code == 200
@@ -153,6 +162,14 @@ def test_job_page_defines_story_navigation_functions(client):
     assert "function checkAutoAdvance" in response.text
 
 
+def test_job_page_story_bar_segments_are_clickable(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert 'getElementById("story-bar").addEventListener("click"' in response.text
+    assert "story-bar-segment" in response.text
+    assert "data-index" in response.text
+
+
 def test_job_page_uses_custom_select_for_dropdowns(client):
     response = client.get("/job.html")
     assert response.status_code == 200
@@ -173,6 +190,13 @@ def test_css_defines_custom_select_styles(client):
     assert ".custom-select-trigger" in response.text
     assert ".custom-select-panel" in response.text
     assert ".custom-select-option" in response.text
+
+
+def test_css_defines_story_bar_active_outline(client):
+    response = client.get("/css/app.css")
+    assert response.status_code == 200
+    assert ".story-bar-segment.active .story-bar-track" in response.text
+    assert "outline" in response.text
 
 
 def test_job_page_contains_progress_bar_styles_and_render_hook(client):
