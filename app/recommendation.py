@@ -15,10 +15,16 @@ HIGH_RES_PIXEL_THRESHOLD = 3840 * 2160
 
 EXTRACTION_MIN_FPS = 2
 EXTRACTION_MAX_FPS = 10
-EXTRACTION_MIN_FRAMES = 80
 EXTRACTION_MAX_FRAMES = 300
-EXTRACTION_SELECTION_RATIO = 0.5
 EXTRACTION_TARGET_SAMPLE_SECONDS = 300  # tuned so a 10s clip lands at EXTRACTION_MAX_FPS
+
+# Matches app/sharp_frames.py's run_extraction() defaults, which now pass these
+# same values as explicit --batch-size/--batch-buffer flags instead of relying
+# on sharp-frames' own CLI defaults - kept as separate constants (like
+# app/extraction.py's _IMAGE_SUFFIXES) since this module is pure/dependency-free
+# and shouldn't import a subprocess-wrapping module just for two ints.
+EXTRACTION_BATCH_SIZE = 5
+EXTRACTION_BATCH_BUFFER = 2
 
 
 @dataclass
@@ -57,19 +63,18 @@ class Recommendation:
 def recommend_extraction(video: VideoMetadata) -> ExtractionSettings:
     duration = max(video.duration_seconds, 1.0)
     # Sample richly for short clips, more sparsely for long ones, within a
-    # practical fps range for sharp-frames. Then select roughly half the
-    # sampled pool as "sharp enough", clamped to a sane frame-count range,
-    # and never request more frames than were actually sampled.
+    # practical fps range for sharp-frames.
     fps = int(min(EXTRACTION_MAX_FPS, max(EXTRACTION_MIN_FPS, round(EXTRACTION_TARGET_SAMPLE_SECONDS / duration))))
     total_sampled = duration * fps
-    target = round(total_sampled * EXTRACTION_SELECTION_RATIO)
-    num_frames = int(min(EXTRACTION_MAX_FRAMES, max(EXTRACTION_MIN_FRAMES, target)))
-    num_frames = min(num_frames, int(total_sampled))
-    # "batched" (sharp-frames' own default batch_size=5/batch_buffer=2) matches
-    # reflct.app's own capture guide for 3DGS: extract at >=10fps, pick the
-    # sharpest frame per batch of 5 - one frame per ~0.5s of footage, ~80%
-    # overlap between selections. num_frames stays computed for display/
-    # informational purposes but is unused by run_extraction for this method.
+    # "batched" (matches reflct.app's own capture guide for 3DGS: extract at
+    # >=10fps, pick the sharpest frame per batch of 5) keeps 1 frame per
+    # (batch_size + batch_buffer) sampled frames - see app/sharp_frames.py's
+    # run_extraction(), which pins these exact values as explicit CLI flags.
+    # num_frames must track that real yield, not an arbitrary target ratio,
+    # or the UI promises a frame count "batched" was never going to produce.
+    step = EXTRACTION_BATCH_SIZE + EXTRACTION_BATCH_BUFFER
+    target = round(total_sampled / step)
+    num_frames = min(EXTRACTION_MAX_FRAMES, target, int(total_sampled))
     return ExtractionSettings(fps=fps, num_frames=num_frames, selection_method="batched")
 
 

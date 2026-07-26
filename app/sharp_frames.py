@@ -46,6 +46,14 @@ def _reader_thread(stream, output_queue: queue.Queue) -> None:
     output_queue.put(None)  # sentinel: stream closed
 
 
+# sharp-frames' own CLI defaults (verified against the installed package) -
+# pinned here as explicit flags rather than left implicit, so an upgraded
+# sharp-frames version can't silently change "batched"'s real yield out from
+# under app/recommendation.py's num_frames math, which assumes this exact ratio.
+_BATCH_SIZE = 5
+_BATCH_BUFFER = 2
+
+
 def run_extraction(
     input_path: Path,
     output_dir: Path,
@@ -75,6 +83,8 @@ def run_extraction(
     ]
     if selection_method == "best-n":
         command += ["--num-frames", str(num_frames)]
+    elif selection_method == "batched":
+        command += ["--batch-size", str(_BATCH_SIZE), "--batch-buffer", str(_BATCH_BUFFER)]
 
     process = subprocess.Popen(
         command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1

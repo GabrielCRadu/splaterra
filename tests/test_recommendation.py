@@ -89,11 +89,13 @@ def test_max_gaussians_capped_for_very_high_vram():
     assert rec.lichtfeld.max_gaussians == 6_000_000
 
 
-def test_recommend_extraction_short_clip_uses_max_fps_and_min_frames():
+def test_recommend_extraction_short_clip_uses_max_fps():
     video = VideoMetadata(width=1920, height=1080, fps=30.0, duration_seconds=10.0, codec="h264")
     settings = recommend_extraction(video)
     assert settings.fps == 10
-    assert settings.num_frames == 80
+    # "batched" keeps 1 frame per (batch_size=5 + batch_buffer=2) sampled -
+    # 100 sampled at 10fps over 10s -> round(100 / 7) = 14, not an arbitrary floor.
+    assert settings.num_frames == 14
     assert settings.selection_method == "batched"
 
 
@@ -101,22 +103,25 @@ def test_recommend_extraction_very_short_clip_caps_frames_to_what_exists():
     video = VideoMetadata(width=1920, height=1080, fps=30.0, duration_seconds=2.0, codec="h264")
     settings = recommend_extraction(video)
     assert settings.fps == 10
-    # only ~20 frames actually get sampled at 10fps over 2s - never ask for more than that
-    assert settings.num_frames == 20
+    # 20 sampled at 10fps over 2s -> round(20 / 7) = 3, well under what's sampled
+    assert settings.num_frames == 3
 
 
 def test_recommend_extraction_medium_clip_scales_down_fps():
     video = VideoMetadata(width=1920, height=1080, fps=30.0, duration_seconds=60.0, codec="h264")
     settings = recommend_extraction(video)
     assert settings.fps == 5
-    assert settings.num_frames == 150
+    # 300 sampled at 5fps over 60s -> round(300 / 7) = 43
+    assert settings.num_frames == 43
 
 
 def test_recommend_extraction_long_clip_uses_min_fps_and_caps_frames():
     video = VideoMetadata(width=1920, height=1080, fps=30.0, duration_seconds=300.0, codec="h264")
     settings = recommend_extraction(video)
     assert settings.fps == 2
-    assert settings.num_frames == 300
+    # 600 sampled at 2fps over 300s -> round(600 / 7) = 86, still under the
+    # EXTRACTION_MAX_FRAMES=300 display ceiling so that cap isn't hit here.
+    assert settings.num_frames == 86
 
 
 def test_recommend_included_in_full_recommendation():

@@ -50,6 +50,53 @@ def test_run_extraction_returns_frames_on_success(tmp_path, monkeypatch):
     assert "extracted 2 frames" in result.log
 
 
+def test_run_extraction_pins_batch_flags_for_batched_method(tmp_path, monkeypatch):
+    # app/recommendation.py's num_frames math assumes batch_size=5/batch_buffer=2 -
+    # these must be passed explicitly, not left to sharp-frames' own CLI defaults,
+    # or an upgraded sharp-frames could silently break that assumption.
+    monkeypatch.setattr(sharp_frames.shutil, "which", lambda name: "/usr/bin/sharp-frames")
+    output_dir = tmp_path / "out"
+    captured: dict = {}
+
+    def fake_popen(command, stdout, stderr, text, bufsize):
+        captured["command"] = command
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "frame_0001.jpg").write_bytes(b"fake")
+        return _fake_popen("done\n", returncode=0)
+
+    monkeypatch.setattr(sharp_frames.subprocess, "Popen", fake_popen)
+
+    sharp_frames.run_extraction(tmp_path / "video.mp4", output_dir, selection_method="batched")
+
+    command = captured["command"]
+    assert command[command.index("--batch-size") + 1] == "5"
+    assert command[command.index("--batch-buffer") + 1] == "2"
+    assert "--num-frames" not in command
+
+
+def test_run_extraction_omits_batch_flags_for_best_n_method(tmp_path, monkeypatch):
+    monkeypatch.setattr(sharp_frames.shutil, "which", lambda name: "/usr/bin/sharp-frames")
+    output_dir = tmp_path / "out"
+    captured: dict = {}
+
+    def fake_popen(command, stdout, stderr, text, bufsize):
+        captured["command"] = command
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "frame_0001.jpg").write_bytes(b"fake")
+        return _fake_popen("done\n", returncode=0)
+
+    monkeypatch.setattr(sharp_frames.subprocess, "Popen", fake_popen)
+
+    sharp_frames.run_extraction(
+        tmp_path / "video.mp4", output_dir, selection_method="best-n", num_frames=50
+    )
+
+    command = captured["command"]
+    assert command[command.index("--num-frames") + 1] == "50"
+    assert "--batch-size" not in command
+    assert "--batch-buffer" not in command
+
+
 def test_run_extraction_reports_progress_from_tqdm_style_output(tmp_path, monkeypatch):
     monkeypatch.setattr(sharp_frames.shutil, "which", lambda name: "/usr/bin/sharp-frames")
 
