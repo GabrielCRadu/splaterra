@@ -77,6 +77,15 @@ default de instalare:
 - `app/lichtfeld.py` + `app/training_service.py` — wrapper CLI LichtFeld Studio (flag-uri si
   comportament confirmate pe un training real: iese `<output_dir>/splat_<iteratii>.ply`, progresul
   se parseaza corect din stdout — vezi `docs/ISSUES.md`) + serviciul de training local.
+  `lichtfeld.py` include si `convert_splat()`, wrapper peste subcomanda ascunsa
+  `LichtFeld-Studio.exe convert` (nu apare in `--help`-ul principal) pentru export
+  ply/sog/spz/html — `.sog` e formatul PlayCanvas SuperSplat, `.spz` e Niantic.
+- `app/export_service.py` — orchestreaza conversia de format ca stage nou (`export`), refolosind
+  tiparul job_stages existent (fara UI nou necesar — bara de progres si log-ul "advanced view"
+  functioneaza automat pentru orice nume de stage).
+- `app/training_metrics.py` — parseaza log-ul brut de training si scrie inregistrari JSONL in
+  `data/training_runs.jsonl`, acumuland date reale (nr. gaussieni, VRAM folosit, etc.) pentru
+  calibrarea constantelor din `app/recommendation.py`.
 - `app/api/*.py` — router-ele HTTP (thin), unul per domeniu.
 - `static/*.html` + `static/css/app.css` + `static/js/app.js` — UI-ul mobil-first.
 - `tests/` — pytest; `conftest.py` are fixture-urile `job_store` si `client`. Testele
