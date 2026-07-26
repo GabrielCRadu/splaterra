@@ -18,8 +18,12 @@ Backlog de idei, in orice ordine. Adaugat de owner, de rezolvat de Claude in ses
       Endpoint nou `GET /jobs/{id}/video-info` (estimare `round(durata * fps)`, acelasi mod de
       calcul deja folosit in `app/recommendation.py`), afisat in panoul "Setari extragere" din
       `static/job.html`. Facut in `1bddf60`.
-- [ ] Metoda de extragere implicita noua: batch selection, cu aceeasi logica ca pe
-      https://sharp-frames.reflct.app/ (referinta data de owner pentru comportamentul exact dorit).
+- [x] Metoda de extragere implicita noua: batch selection, cu aceeasi logica ca pe
+      https://sharp-frames.reflct.app/. Verificat direct in docs.reflct.app/capturing_gaussian_splats:
+      ghidul lor pentru 3DGS recomanda exact ce foloseste deja `sharp-frames` ca default pentru
+      "batched" (batch_size=5, batch_buffer=2, la >=10fps) — n-a fost nevoie de flag-uri noi, doar
+      schimbat default-ul in `app/recommendation.py::recommend_extraction()` si in
+      `EXTRACT_DEFAULTS` din `static/job.html`. Facut in `5954c1c`.
 - [ ] Posibilitatea de a incarca direct cadre deja extrase (skip peste extragerea automata).
 - [x] Posibilitatea de a adauga mai mult de un clip video per job. `sharp-frames` suporta nativ
       un director cu mai multe video-uri (auto-detectat) — extragerea trimite `raw_dir(job_id)`
