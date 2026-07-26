@@ -142,3 +142,13 @@ def test_job_page_contains_log_output_toggle(client):
     assert response.status_code == 200
     assert "log-toggle" in response.text
     assert "log-output" in response.text
+
+
+def test_job_page_contains_usage_panel(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert 'id="usage-panel"' in response.text
+    assert 'id="usage-cpu"' in response.text
+    assert 'id="usage-ram"' in response.text
+    assert 'id="usage-gpu"' in response.text
+    assert 'id="usage-vram"' in response.text

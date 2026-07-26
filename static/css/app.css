@@ -285,3 +285,11 @@ select { appearance: none; -webkit-appearance: none; }
   max-height: 320px;
   overflow-y: auto;
 }
+
+.usage-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13.5px;
+  padding: 6px 0;
+}
+.usage-row + .usage-row { border-top: 1px solid var(--hairline); }

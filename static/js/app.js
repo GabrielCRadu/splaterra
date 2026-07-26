@@ -50,3 +50,26 @@ function pollStages(jobId, onUpdate, intervalMs) {
     stopped = true;
   };
 }
+
+function pollUsage(onUpdate, intervalMs) {
+  intervalMs = intervalMs || 2000;
+  let stopped = false;
+
+  async function tick() {
+    if (stopped) return;
+    try {
+      const usage = await apiGet("/hardware/usage");
+      onUpdate(usage);
+    } catch (err) {
+      console.error("usage poll failed", err);
+    }
+    if (!stopped) {
+      setTimeout(tick, intervalMs);
+    }
+  }
+
+  tick();
+  return function stop() {
+    stopped = true;
+  };
+}

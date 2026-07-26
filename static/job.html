@@ -12,6 +12,13 @@
 
 <div class="card" id="stage-list"></div>
 
+<div class="card" id="usage-panel" style="display:none;">
+  <div class="usage-row"><span class="job-meta">CPU</span><span id="usage-cpu">—</span></div>
+  <div class="usage-row"><span class="job-meta">RAM</span><span id="usage-ram">—</span></div>
+  <div class="usage-row"><span class="job-meta">GPU</span><span id="usage-gpu">—</span></div>
+  <div class="usage-row"><span class="job-meta">VRAM</span><span id="usage-vram">—</span></div>
+</div>
+
 <div id="extract-settings-block" style="display:none;">
   <button class="btn-ghost" id="btn-extract-settings-toggle" type="button">&#9881;&#65039; Setari extragere</button>
   <div class="card" id="extract-settings-panel" style="display:none;">
@@ -98,6 +105,18 @@
       .join("");
   }
 
+  function renderUsage(usage) {
+    document.getElementById("usage-cpu").textContent = `${Math.round(usage.cpu_percent)}%`;
+    document.getElementById("usage-ram").textContent =
+      `${usage.ram_used_gb.toFixed(1)} / ${usage.ram_total_gb.toFixed(1)} GB`;
+    document.getElementById("usage-gpu").textContent =
+      usage.gpu_percent === null ? "indisponibil" : `${Math.round(usage.gpu_percent)}%`;
+    document.getElementById("usage-vram").textContent =
+      usage.vram_used_mb === null
+        ? "indisponibil"
+        : `${(usage.vram_used_mb / 1024).toFixed(1)} / ${(usage.vram_total_mb / 1024).toFixed(1)} GB`;
+  }
+
   function stageStatus(stages, name) {
     const stage = stages.find((s) => s.stage === name);
     return stage ? stage.status : null;
@@ -139,6 +158,12 @@
     const trainingLink = document.getElementById("link-training");
     trainingLink.style.display = trainingDone ? "block" : "none";
     trainingLink.href = `/jobs/${jobId}/training/download`;
+
+    document.getElementById("usage-panel").style.display = stages.some(
+      (s) => s.status === "running"
+    )
+      ? "block"
+      : "none";
   }
 
   async function refresh() {
@@ -248,6 +273,7 @@
 
   refresh();
   let stopPolling = startPolling();
+  pollUsage(renderUsage, 2000);
 </script>
 </body>
 </html>
