@@ -1,8 +1,14 @@
+import time
 from unittest.mock import MagicMock
 
 import pytest
 
 from app import lichtfeld
+
+# Captured before any test can monkeypatch time.sleep - see the comment on
+# HangingStdout in test_run_training_raises_on_timeout for why this must be
+# an early-bound reference, not a dynamic `time.sleep` attribute lookup.
+_REAL_SLEEP = time.sleep
 
 
 def _fake_popen_result(returncode: int = 0):
@@ -211,11 +217,14 @@ def test_run_training_does_not_crash_when_no_progress_pattern_matches(tmp_path, 
 def test_run_training_raises_on_timeout(tmp_path, monkeypatch):
     monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
 
+    # This reader thread outlives this test (HangingStdout never reaches EOF,
+    # so it's never joined) and was observed corrupting an unrelated later
+    # test in the same session (test_realityscan.py's progress-file test)
+    # that monkeypatches the same shared `time.sleep` attribute. See
+    # docs/ISSUES.md and _REAL_SLEEP's definition above.
     class HangingStdout:
         def read(self, _n):
-            import time as real_time
-
-            real_time.sleep(0.01)
+            _REAL_SLEEP(0.01)
             return " "  # never EOF, never \r or \n
 
     def fake_popen(command, stdout, stderr, text, bufsize):

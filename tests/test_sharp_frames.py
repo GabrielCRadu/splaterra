@@ -7,6 +7,11 @@ import pytest
 
 from app import sharp_frames
 
+# Captured before any test can monkeypatch time.sleep - see the comment on
+# HangingStdout below for why this must be an early-bound reference, not a
+# dynamic `time.sleep` attribute lookup.
+_REAL_SLEEP = time.sleep
+
 
 class FakeStdout(io.StringIO):
     """A StringIO that, once exhausted, keeps returning "" like a real closed pipe."""
@@ -104,11 +109,18 @@ def test_run_extraction_raises_on_timeout(tmp_path, monkeypatch):
     # one core for the rest of the test session (harmless but wasteful) -
     # this uses the real time.sleep (not app.sharp_frames.time, which the
     # test mocks separately for the main-thread deadline check below).
+    #
+    # _REAL_SLEEP is captured at module import time, before any test's
+    # monkeypatch can run - `time` is a process-wide singleton module, so a
+    # dynamic `import time; time.sleep(...)` inside read() would pick up
+    # whatever another test currently has `time.sleep` monkeypatched to. This
+    # thread outlives this test (never reaches EOF, so it's never joined) and
+    # was observed corrupting an unrelated later test in the same session
+    # (test_realityscan.py's progress-file test) that monkeypatches
+    # `realityscan.time.sleep` - the same shared attribute. See docs/ISSUES.md.
     class HangingStdout:
         def read(self, _n):
-            import time as real_time
-
-            real_time.sleep(0.01)
+            _REAL_SLEEP(0.01)
             return " "  # never "" (EOF), never \r or \n - buffers forever
 
     def fake_popen(command, stdout, stderr, text, bufsize):
