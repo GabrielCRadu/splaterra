@@ -6,6 +6,7 @@ from pathlib import Path
 
 from app.job_store import JobStore
 from app.paths import raw_dir
+from app.video_metadata import VideoMetadata, aggregate_metadata, probe_video
 
 _VIDEO_EXTENSIONS = frozenset({".mp4", ".mov", ".avi", ".mkv", ".m4v", ".webm", ".mts", ".m2ts"})
 
@@ -23,6 +24,16 @@ def list_raw_videos(job_id: str) -> list[Path]:
     if not directory.is_dir():
         return []
     return sorted(p for p in directory.glob("*") if p.is_file() and p.suffix.lower() in _VIDEO_EXTENSIONS)
+
+
+def probe_ingested_video(job_id: str, raw_video_path: str) -> VideoMetadata:
+    # Caller must have already confirmed ingestion is done (raw_video_path is not
+    # None) - shared by app/recommendation_service.py and the /video-info endpoint
+    # so both use the exact same multi-clip-aware probing logic.
+    videos = list_raw_videos(job_id)
+    if len(videos) > 1:
+        return aggregate_metadata([probe_video(video) for video in videos])
+    return probe_video(Path(raw_video_path))
 
 
 def import_local_file(store: JobStore, job_id: str, source_path: Path) -> Path:

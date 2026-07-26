@@ -1,7 +1,11 @@
+from unittest.mock import MagicMock
+
 import pytest
 
-from app.ingestion import IngestionError, import_local_file, list_raw_videos
+from app import ingestion
+from app.ingestion import IngestionError, import_local_file, list_raw_videos, probe_ingested_video
 from app.paths import raw_dir
+from app.video_metadata import VideoMetadata
 
 
 def test_import_local_file_copies_and_records_job(job_store, tmp_path):
@@ -79,3 +83,38 @@ def test_list_raw_videos_ignores_non_video_files(job_store):
     videos = list_raw_videos(job.id)
 
     assert videos == [directory / "clip.mp4"]
+
+
+def test_probe_ingested_video_single_clip_probes_raw_video_path(job_store, tmp_path, monkeypatch):
+    job = job_store.create_job("Test")
+    video_path = tmp_path / "clip.mp4"
+
+    fake_meta = VideoMetadata(width=1920, height=1080, fps=30.0, duration_seconds=10.0, codec="h264")
+    fake_probe = MagicMock(return_value=fake_meta)
+    monkeypatch.setattr(ingestion, "probe_video", fake_probe)
+
+    result = probe_ingested_video(job.id, str(video_path))
+
+    fake_probe.assert_called_once_with(video_path)
+    assert result == fake_meta
+
+
+def test_probe_ingested_video_aggregates_multiple_clips(job_store, tmp_path, monkeypatch):
+    job = job_store.create_job("Test")
+    directory = raw_dir(job.id)
+    directory.mkdir(parents=True, exist_ok=True)
+    clip_a = directory / "a_clip.mp4"
+    clip_b = directory / "b_clip.mp4"
+    clip_a.write_bytes(b"fake")
+    clip_b.write_bytes(b"fake")
+
+    probed = {
+        clip_a: VideoMetadata(width=1920, height=1080, fps=30.0, duration_seconds=10.0, codec="h264"),
+        clip_b: VideoMetadata(width=1280, height=720, fps=30.0, duration_seconds=20.0, codec="h264"),
+    }
+    monkeypatch.setattr(ingestion, "probe_video", lambda path: probed[path])
+
+    result = probe_ingested_video(job.id, str(clip_a))
+
+    assert result.duration_seconds == 30.0
+    assert result.width == 1920
