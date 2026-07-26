@@ -6,9 +6,10 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from app.deps import get_job_store, run_with_new_store
-from app.ingestion import import_local_file, list_raw_videos
+from app.ingestion import import_local_file, list_raw_videos, probe_ingested_video
 from app.job_store import JobStore
 from app.uploads import UploadError, complete_upload, received_chunks, save_chunk, start_upload
+from app.video_metadata import VideoMetadataError
 
 router = APIRouter(prefix="/jobs", tags=["ingestion"])
 
@@ -40,6 +41,24 @@ def get_raw_videos(job_id: str, store: JobStore = Depends(get_job_store)) -> dic
     if store.get_job(job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return {"videos": [p.name for p in list_raw_videos(job_id)]}
+
+
+@router.get("/{job_id}/video-info")
+def get_video_info(job_id: str, store: JobStore = Depends(get_job_store)) -> dict[str, float | int]:
+    job = store.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.raw_video_path is None:
+        raise HTTPException(status_code=404, detail="Job has no ingested video yet")
+    try:
+        meta = probe_ingested_video(job_id, job.raw_video_path)
+    except VideoMetadataError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {
+        "fps": meta.fps,
+        "duration_seconds": meta.duration_seconds,
+        "total_frames": round(meta.duration_seconds * meta.fps),
+    }
 
 
 @router.post("/{job_id}/uploads")
