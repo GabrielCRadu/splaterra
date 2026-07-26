@@ -41,6 +41,12 @@
 <a class="btn-ghost" id="link-alignment" style="display:none;">Vezi alignment</a>
 <button class="btn" id="btn-recommend" style="display:none;">Calculeaza recomandare</button>
 <a class="btn-ghost" id="link-recommendation" style="display:none;">Vezi recomandarea</a>
+<div class="card" id="train-settings-panel" style="display:none;">
+  <label class="checkbox-row" for="train-variable-exposure">
+    <input type="checkbox" id="train-variable-exposure" />
+    Expunerea/balansul de alb variaza intre cadre (nu e fixat pe camera)
+  </label>
+</div>
 <button class="btn" id="btn-train" style="display:none;">Porneste antrenarea</button>
 <a class="btn-ghost" id="link-training" style="display:none;" download>Descarca splat-ul</a>
 
@@ -154,6 +160,8 @@
 
     document.getElementById("btn-train").style.display =
       alignmentDone && !trainingDone ? "block" : "none";
+    document.getElementById("train-settings-panel").style.display =
+      alignmentDone && !trainingDone ? "block" : "none";
 
     const trainingLink = document.getElementById("link-training");
     trainingLink.style.display = trainingDone ? "block" : "none";
@@ -253,7 +261,8 @@
   });
 
   document.getElementById("btn-train").addEventListener("click", async () => {
-    await apiPost(`/jobs/${jobId}/train`, {});
+    const variableExposure = document.getElementById("train-variable-exposure").checked;
+    await apiPost(`/jobs/${jobId}/train`, { variable_exposure: variableExposure });
     refresh();
     stopPolling();
     stopPolling = startPolling();

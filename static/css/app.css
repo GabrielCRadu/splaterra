@@ -293,3 +293,18 @@ select { appearance: none; -webkit-appearance: none; }
   padding: 6px 0;
 }
 .usage-row + .usage-row { border-top: 1px solid var(--hairline); }
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.checkbox-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-green);
+  flex-shrink: 0;
+}

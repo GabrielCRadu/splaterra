@@ -152,3 +152,10 @@ def test_job_page_contains_usage_panel(client):
     assert 'id="usage-ram"' in response.text
     assert 'id="usage-gpu"' in response.text
     assert 'id="usage-vram"' in response.text
+
+
+def test_job_page_contains_variable_exposure_checkbox(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert 'id="train-variable-exposure"' in response.text
+    assert 'type="checkbox"' in response.text
