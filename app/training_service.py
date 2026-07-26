@@ -9,7 +9,7 @@ from app.hardware import UsageSnapshot, detect_hardware, sample_usage
 from app.job_store import JobStore
 from app.lichtfeld import TrainingResult, run_training
 from app.paths import alignment_dir, training_dir
-from app.recommendation import max_gaussians_for_vram
+from app.recommendation import training_resize_factor
 from app.training_metrics import TrainingMetrics, append_training_metrics, parse_training_log
 
 logger = logging.getLogger(__name__)
@@ -30,24 +30,6 @@ def _max_gaussians_from_recommendation(recommendation_json: str | None) -> int |
         return json.loads(recommendation_json)["lichtfeld"]["max_gaussians"]
     except (KeyError, TypeError, ValueError):
         return None
-
-
-def _safe_max_gaussians(recommended: int | None, frame_count: int | None) -> int | None:
-    # The recommendation was computed before extraction ran, so it couldn't
-    # factor in the real frame_count (see app/recommendation.py's
-    # max_gaussians_for_vram) - recompute here now that it's known, and never
-    # exceed whatever the recommendation already said.
-    if recommended is None:
-        return None
-    try:
-        hardware = detect_hardware()
-    except Exception:
-        logger.exception("Failed to detect hardware for max_gaussians safety cap (non-fatal)")
-        return recommended
-    if hardware.gpu is None:
-        return recommended
-    vram_gb = hardware.gpu.vram_mb / 1024
-    return min(recommended, max_gaussians_for_vram(vram_gb, frame_count))
 
 
 def _log_training_metrics(
@@ -122,9 +104,8 @@ def compute_training(
     # colmap_sparse_dir.
     data_path = alignment_dir(job_id)
     output_dir = training_dir(job_id)
-    max_gaussians = _safe_max_gaussians(
-        _max_gaussians_from_recommendation(job.recommendation_json), job.frame_count
-    )
+    max_gaussians = _max_gaussians_from_recommendation(job.recommendation_json)
+    resize_factor = training_resize_factor(job.frame_count)
 
     store.upsert_stage(job_id, "training", "running", started_at=_now())
 
@@ -144,6 +125,7 @@ def compute_training(
             output_dir,
             max_gaussians=max_gaussians,
             bilateral_grid=variable_exposure,
+            resize_factor=resize_factor,
             on_progress=report_progress,
             on_process_start=lambda p: process_registry.register(job_id, "training", p),
         )

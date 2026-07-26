@@ -49,7 +49,7 @@ def test_compute_training_updates_job_and_stage(job_store, tmp_path, monkeypatch
     fake_result = TrainingResult(splat_path=tmp_path / "out" / "result.ply", log="training ok")
     captured = {}
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress, on_process_start=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None):
         captured["data_path"] = data_path
         captured["output_dir"] = output_dir
         captured["max_gaussians"] = max_gaussians
@@ -116,7 +116,7 @@ def test_compute_training_reports_friendly_message_when_cancelled(job_store, tmp
         undistorted_images_dir=str(tmp_path / "images"),
     )
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress, on_process_start):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start):
         fake_process = MagicMock()
         fake_process.poll.return_value = None
         on_process_start(fake_process)
@@ -165,7 +165,7 @@ def test_compute_training_passes_max_gaussians_from_recommendation(job_store, tm
 
     captured = {}
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress, on_process_start=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None):
         captured["max_gaussians"] = max_gaussians
         return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
 
@@ -176,10 +176,13 @@ def test_compute_training_passes_max_gaussians_from_recommendation(job_store, tm
     assert captured["max_gaussians"] == 3_000_000
 
 
-def test_compute_training_reduces_max_gaussians_for_large_frame_count(job_store, tmp_path, monkeypatch):
-    # Real crash: a 12GB RTX 3060 hit CUDA OOM at max_gaussians=4_800_000 on
-    # an 830-image job - training should ask for meaningfully less, not blindly
-    # trust a cap computed before extraction knew the real frame count.
+def test_compute_training_downscales_images_instead_of_gaussians_for_large_jobs(
+    job_store, tmp_path, monkeypatch
+):
+    # Real crash: a 12GB RTX 3060 hit CUDA OOM during image loading (not a
+    # gaussian-tensor allocation) at max_gaussians=4_800_000 on an 830-image
+    # job. The fix downscales training images (LichtFeld's --resize_factor)
+    # rather than shrinking the gaussian budget, which would cost detail.
     _patch_diagnostics(monkeypatch)
     job = job_store.create_job("Test")
     job_store.update_job(
@@ -192,15 +195,45 @@ def test_compute_training_reduces_max_gaussians_for_large_frame_count(job_store,
 
     captured = {}
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress, on_process_start=None):
+    def fake_run_training(
+        data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor, on_progress, on_process_start=None
+    ):
         captured["max_gaussians"] = max_gaussians
+        captured["resize_factor"] = resize_factor
         return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
 
     monkeypatch.setattr(training_service, "run_training", fake_run_training)
 
     training_service.compute_training(job_store, job.id)
 
-    assert captured["max_gaussians"] < 4_800_000
+    assert captured["max_gaussians"] == 4_800_000
+    assert captured["resize_factor"] > 1
+
+
+def test_compute_training_uses_full_resolution_for_small_jobs(job_store, tmp_path, monkeypatch):
+    _patch_diagnostics(monkeypatch)
+    job = job_store.create_job("Test")
+    job_store.update_job(
+        job.id,
+        colmap_sparse_dir=str(tmp_path / "sparse" / "0"),
+        undistorted_images_dir=str(tmp_path / "images"),
+        frame_count=78,
+        recommendation_json=json.dumps({"lichtfeld": {"max_gaussians": 4_800_000, "bf16": True}}),
+    )
+
+    captured = {}
+
+    def fake_run_training(
+        data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor, on_progress, on_process_start=None
+    ):
+        captured["resize_factor"] = resize_factor
+        return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
+
+    monkeypatch.setattr(training_service, "run_training", fake_run_training)
+
+    training_service.compute_training(job_store, job.id)
+
+    assert captured["resize_factor"] == 1
 
 
 def test_compute_training_omits_max_gaussians_when_no_recommendation(job_store, tmp_path, monkeypatch):
@@ -214,7 +247,7 @@ def test_compute_training_omits_max_gaussians_when_no_recommendation(job_store, 
 
     captured = {}
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress, on_process_start=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None):
         captured["max_gaussians"] = max_gaussians
         return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
 
@@ -234,7 +267,7 @@ def test_compute_training_forwards_progress_to_job_store(job_store, tmp_path, mo
         undistorted_images_dir=str(tmp_path / "images"),
     )
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress, on_process_start=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None):
         on_progress(20.0)
         on_progress(80.0)
         return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
@@ -258,7 +291,7 @@ def test_compute_training_passes_variable_exposure_as_bilateral_grid(job_store, 
 
     captured = {}
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress, on_process_start=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None):
         captured["bilateral_grid"] = bilateral_grid
         return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
 
@@ -282,7 +315,7 @@ def test_compute_training_logs_metrics_on_success(job_store, tmp_path, monkeypat
         undistorted_images_dir=str(tmp_path / "images"),
     )
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress, on_process_start=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None):
         on_progress(50.0)
         on_progress(100.0)
         return TrainingResult(splat_path=tmp_path / "result.ply", log="Final splats: 4800000")

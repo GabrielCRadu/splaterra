@@ -96,6 +96,7 @@ def run_training(
     *,
     max_gaussians: int | None = None,
     bilateral_grid: bool = False,
+    resize_factor: int = 1,
     timeout_seconds: int = 7200,
     on_progress: Callable[[float], None] | None = None,
     on_process_start: Callable[[subprocess.Popen], None] | None = None,
@@ -123,6 +124,12 @@ def run_training(
         # settings) - the bilateral grid appearance-correction technique from
         # recent Gaussian Splatting/NeRF literature.
         command.append("--bilateral-grid")
+    if resize_factor != 1:
+        # LichtFeld's own default is "auto", which wasn't aggressive enough
+        # to avoid a real CUDA OOM on a large multi-clip job (see
+        # app/recommendation.py's training_resize_factor) - pass an explicit
+        # value instead of trusting auto-detection for large datasets.
+        command += ["--resize_factor", str(resize_factor)]
 
     process = subprocess.Popen(
         command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1

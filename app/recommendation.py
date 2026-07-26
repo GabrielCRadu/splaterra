@@ -14,19 +14,18 @@ MAX_GAUSSIANS_CAP = 6_000_000
 MIN_MAX_GAUSSIANS = 500_000
 HIGH_RES_PIXEL_THRESHOLD = 3840 * 2160
 
-# LichtFeld's MCMC strategy pre-allocates VRAM for the full max_gaussians
-# CAPACITY upfront (not just the currently-active gaussian count), and the
-# pipelined image loader/nvJPEG decoder pool separately consumes VRAM that
-# scales with how many training images there are. A 12GB RTX 3060 trained
-# successfully with max_gaussians=4_800_000 on a 78-image job, but hit CUDA
-# out-of-memory with the identical cap on an 830-image job - the GPU had
-# only ~565MB free when a routine 79MB image-decode allocation failed.
-# TRAINING_IMAGE_OVERHEAD_MB reserves a per-image VRAM budget before
-# computing gaussians-per-GB from what's left. This is a conservative
-# first-pass guess from a single failure, not a measured constant -
-# recalibrate once more multi-clip training runs are logged (see
-# data/training_runs.jsonl's num_images/final_gaussians columns).
-TRAINING_IMAGE_OVERHEAD_MB = 8
+# A 12GB RTX 3060 trained successfully with max_gaussians=4_800_000 on a
+# 78-image job, but hit CUDA out-of-memory with the identical cap on an
+# 830-image job - the GPU had only ~565MB free when a routine 79MB
+# image-decode allocation failed (not a gaussian-tensor allocation), during
+# image loading, before training had even started iterating. That points at
+# the pipelined image loader/nvJPEG decoder pool - VRAM that scales with how
+# many training images there are and their resolution - not at the gaussian
+# model itself, which is sized by max_gaussians independent of frame_count.
+# So the fix is downscaling training images (LichtFeld's own --resize_factor,
+# which defaulted to "auto" and wasn't aggressive enough here) rather than
+# shrinking max_gaussians, which would cost detail on exactly the jobs that
+# have the most of it to capture. See training_resize_factor() below.
 
 EXTRACTION_MIN_FPS = 2
 EXTRACTION_MAX_FPS = 10
@@ -93,12 +92,36 @@ def recommend_extraction(video: VideoMetadata) -> ExtractionSettings:
     return ExtractionSettings(fps=fps, num_frames=num_frames, selection_method="batched")
 
 
-def max_gaussians_for_vram(vram_gb: float, frame_count: int | None = None) -> int:
+def max_gaussians_for_vram(vram_gb: float) -> int:
     if vram_gb <= 0:
         return 0
-    reserved_gb = (frame_count * TRAINING_IMAGE_OVERHEAD_MB / 1024) if frame_count else 0.0
-    available_gb = max(0.0, vram_gb - reserved_gb)
-    return max(MIN_MAX_GAUSSIANS, min(MAX_GAUSSIANS_CAP, int(available_gb * GAUSSIANS_PER_VRAM_GB)))
+    return max(MIN_MAX_GAUSSIANS, min(MAX_GAUSSIANS_CAP, int(vram_gb * GAUSSIANS_PER_VRAM_GB)))
+
+
+# LichtFeld's --resize_factor halves width/height per step (2 -> 1/4 the
+# pixels, 4 -> 1/16), directly shrinking the per-image decode/pipeline VRAM
+# footprint that caused the real crash above, without touching max_gaussians.
+# Thresholds are calibrated against a *total dataset megapixel* budget rather
+# than a bare frame count, assuming ~4K frames (8.3 Mpx each - this app's
+# typical GoPro/phone footage, also LichtFeld's own --max-width=3840 default
+# cap): a LichtFeld GitHub issue (MrNeRF/LichtFeld-Studio#65) documents an
+# unrelated OOM crash on datasets past ~2500 total megapixels, which at 8.3
+# Mpx/frame is ~300 frames untouched, or ~1200 frames once resize_factor=2
+# cuts pixels to a quarter. The real crash this fixes (830 frames, 12GB RTX
+# 3060) sits comfortably under the 1200-frame ceiling at factor=2 (~1721
+# Mpx), so that's the first rung, not factor=4. Still a first-pass estimate
+# extrapolated from a different project's RAM-pressure issue, not a direct
+# LichtFeld VRAM benchmark - recalibrate as more multi-clip runs are logged.
+TRAINING_RESIZE_FRAME_THRESHOLDS = ((1200, 4), (300, 2))
+
+
+def training_resize_factor(frame_count: int | None) -> int:
+    if not frame_count:
+        return 1
+    for threshold, factor in TRAINING_RESIZE_FRAME_THRESHOLDS:
+        if frame_count >= threshold:
+            return factor
+    return 1
 
 
 def recommend(
@@ -116,9 +139,6 @@ def recommend(
 
     gpu = hardware.gpu
     vram_gb = gpu.vram_mb / 1024 if gpu else 0.0
-    # frame_count isn't known yet at recommendation time (extraction hasn't
-    # run) - this is a VRAM-only estimate; app/training_service.py recomputes
-    # a frame-count-aware cap once the real count is known.
     max_gaussians = max_gaussians_for_vram(vram_gb)
     bf16 = gpu is not None and gpu.compute_capability >= BF16_MIN_COMPUTE_CAPABILITY
     lichtfeld = LichtFeldSettings(max_gaussians=max_gaussians, bf16=bf16)
