@@ -74,9 +74,9 @@ default de instalare:
   setari RealityScan/LichtFeld + verdict local-vs-cloud.
 - `app/realityscan.py` + `app/alignment_service.py` — wrapper CLI RealityScan (verificat pe
   binarul real) + serviciul de alignment.
-- `app/lichtfeld.py` + `app/training_service.py` — wrapper CLI LichtFeld Studio (flag-uri
-  verificate pe binarul real; comportamentul unui training real inca neverificat in aceasta
-  sesiune) + serviciul de training local.
+- `app/lichtfeld.py` + `app/training_service.py` — wrapper CLI LichtFeld Studio (flag-uri si
+  comportament confirmate pe un training real: iese `<output_dir>/splat_<iteratii>.ply`, progresul
+  se parseaza corect din stdout — vezi `docs/ISSUES.md`) + serviciul de training local.
 - `app/api/*.py` — router-ele HTTP (thin), unul per domeniu.
 - `static/*.html` + `static/css/app.css` + `static/js/app.js` — UI-ul mobil-first.
 - `tests/` — pytest; `conftest.py` are fixture-urile `job_store` si `client`. Testele
