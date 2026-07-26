@@ -43,12 +43,11 @@ Daca `data/` a venit cu folderul, job-urile vechi ar trebui sa apara direct in U
 - Backlog de idei nerezolvate: `docs/TODO.md`.
 - Istoricul deciziilor de design/plan: `docs/superpowers/specs/` si `docs/superpowers/plans/`.
 - **Memoria persistenta a Claude Code** (`~/.claude/projects/<hash-proiect>/memory/`) traieste in
-  home directory-ul userului, NU in repo — nu se muta automat odata cu folderul de proiect. Daca
-  vrei sa pastrezi memoria de context/feedback acumulata, copiaz-o manual de pe PC-ul vechi:
-  `C:\Users\radug\.claude\projects\c--Users-radug-Documents-Claude-Code-gaussian-splatting-app\memory\`
-  catre echivalentul ei pe noul PC (calea depinde de path-ul complet al proiectului acolo). Altfel
-  sesiunea Claude de pe noul PC porneste fara istoric — foloseste acest fisier + `CLAUDE.md` ca
-  sa recapete contextul rapid.
+  home directory-ul userului, NU in repo, si NU se muta automat cu folderul de proiect — de-aia
+  contextul relevant e tinut aici, in `docs/`, in loc sa depinda de ea. Pe PC-ul vechi folderul de
+  memorie era gol la momentul mutarii (nicio memorie salvata inca), deci nu era nimic de copiat
+  manual. Sesiunea Claude de pe noul PC porneste fara istoric extern — foloseste `CLAUDE.md` +
+  acest fisier + `docs/TODO.md` ca sa recapete tot contextul relevant.
 
 ## De facut, ramas neterminat (vezi si CLAUDE.md "Stadiu implementare")
 
