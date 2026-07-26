@@ -3,8 +3,8 @@ def test_train_endpoint_returns_202_and_invokes_service(client, monkeypatch):
 
     calls = []
 
-    def fake_compute_training(store, job_id):
-        calls.append(job_id)
+    def fake_compute_training(store, job_id, *, variable_exposure=False):
+        calls.append((job_id, variable_exposure))
 
     monkeypatch.setattr(training_api, "compute_training", fake_compute_training)
 
@@ -14,7 +14,25 @@ def test_train_endpoint_returns_202_and_invokes_service(client, monkeypatch):
 
     assert response.status_code == 202
     assert response.json() == {"status": "started"}
-    assert calls == [job_id]
+    assert calls == [(job_id, False)]
+
+
+def test_train_endpoint_forwards_variable_exposure_flag(client, monkeypatch):
+    from app.api import training as training_api
+
+    calls = []
+
+    def fake_compute_training(store, job_id, *, variable_exposure=False):
+        calls.append((job_id, variable_exposure))
+
+    monkeypatch.setattr(training_api, "compute_training", fake_compute_training)
+
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+
+    response = client.post(f"/jobs/{job_id}/train", json={"variable_exposure": True})
+
+    assert response.status_code == 202
+    assert calls == [(job_id, True)]
 
 
 def test_train_endpoint_unknown_job_returns_404(client):

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from app.deps import get_job_store, run_with_new_store
 from app.job_store import JobStore
@@ -12,15 +13,22 @@ from app.training_service import compute_training
 router = APIRouter(prefix="/jobs", tags=["training"])
 
 
+class TrainRequest(BaseModel):
+    variable_exposure: bool = False
+
+
 @router.post("/{job_id}/train", status_code=202)
 def train_endpoint(
     job_id: str,
     background_tasks: BackgroundTasks,
+    body: TrainRequest = TrainRequest(),
     store: JobStore = Depends(get_job_store),
 ) -> dict[str, str]:
     if store.get_job(job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    background_tasks.add_task(run_with_new_store, compute_training, job_id)
+    background_tasks.add_task(
+        run_with_new_store, compute_training, job_id, variable_exposure=body.variable_exposure
+    )
     return {"status": "started"}
 
 
