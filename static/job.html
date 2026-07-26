@@ -48,6 +48,12 @@
   </div>
 </div>
 <button class="btn" id="btn-extract" style="display:none;">Extrage cadre</button>
+
+<div class="card" id="import-frames-panel" style="display:none;">
+  <div class="job-meta" style="margin-bottom:8px;">Ai deja cadre extrase?</div>
+  <input type="text" id="import-frames-path" placeholder="Cale folder (ex. C:\Poze\cadre)" />
+  <button class="btn-ghost" id="btn-import-frames" type="button">Foloseste cadrele astea (sari peste extragere)</button>
+</div>
 <a class="btn-ghost" id="link-frames" style="display:none;">Revizuieste cadrele</a>
 <button class="btn" id="btn-align" style="display:none;">Porneste alignment</button>
 <a class="btn-ghost" id="link-alignment" style="display:none;">Vezi alignment</a>
@@ -175,6 +181,7 @@
       ingestionDone && !extractionDone ? "block" : "none";
     document.getElementById("add-clip-panel").style.display =
       ingestionDone && !extractionDone ? "block" : "none";
+    document.getElementById("import-frames-panel").style.display = !extractionDone ? "block" : "none";
 
     const framesLink = document.getElementById("link-frames");
     framesLink.style.display = extractionDone ? "block" : "none";
@@ -307,6 +314,18 @@
     });
     document.getElementById("add-clip-status").textContent = "";
     document.getElementById("add-clip-file-input").value = "";
+    refresh();
+    stopPolling();
+    stopPolling = startPolling();
+  });
+
+  document.getElementById("btn-import-frames").addEventListener("click", async () => {
+    const sourcePath = document.getElementById("import-frames-path").value.trim();
+    if (!sourcePath) {
+      alert("Introdu calea folderului cu cadre.");
+      return;
+    }
+    await apiPost(`/jobs/${jobId}/import-frames`, { source_path: sourcePath });
     refresh();
     stopPolling();
     stopPolling = startPolling();
