@@ -414,6 +414,7 @@
       row.innerHTML = `
         <div class="upload-row-name">${escapeHtml(file.name)}</div>
         <div class="progress-track"><div class="progress-fill" style="width:0%"></div></div>
+        <div class="upload-row-error"></div>
       `;
       listEl.appendChild(row);
       return row;
@@ -428,6 +429,7 @@
         rows[index].classList.add("upload-row-done");
       } catch (err) {
         rows[index].classList.add("upload-row-failed");
+        rows[index].querySelector(".upload-row-error").textContent = err.message || String(err);
       }
     }
 

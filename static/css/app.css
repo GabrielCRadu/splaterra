@@ -339,6 +339,11 @@ input[type="file"]::-webkit-file-upload-button:active {
   box-shadow: 0 0 12px var(--accent-red-glow);
 }
 .upload-row-failed .upload-row-name { color: var(--accent-red); }
+.upload-row-error {
+  font-size: 12px;
+  color: var(--accent-red);
+  margin-top: 4px;
+}
 
 .log-output {
   background: rgba(255, 255, 255, 0.04);

@@ -230,6 +230,7 @@ def test_job_page_contains_add_clip_section(client):
     assert 'id="btn-add-clip-upload"' in response.text
     assert 'id="add-clip-upload-list"' in response.text
     assert "add-clip-local-path" not in response.text
+    assert "upload-row-error" in response.text
 
 
 def test_job_page_contains_export_controls(client):
