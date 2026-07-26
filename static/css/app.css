@@ -36,6 +36,12 @@ html, body {
   color: var(--ink);
   font-family: -apple-system, "SF Pro Display", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* The story-track is 500% wide (5 slides) inside an overflow:hidden
+     viewport - some mobile browsers still shift the page horizontally when
+     scrolling a focused input into view, which looks like the carousel
+     landed mid-transition between two slides. The page is single-column and
+     never legitimately needs horizontal scroll, so block it outright. */
+  overflow-x: hidden;
 }
 
 body { padding: 20px 16px 80px; max-width: 480px; margin: 0 auto; }

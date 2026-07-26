@@ -568,7 +568,13 @@
   });
 
   document.getElementById("story-viewport").addEventListener("click", (event) => {
-    if (event.target.closest("button, a, input, select, .custom-select")) return;
+    // Only the slide's own empty padding counts as a tap-to-navigate zone -
+    // requiring the exact target (not closest()) means ANY content inside a
+    // slide (labels, hints, divs, not just buttons/inputs) blocks navigation,
+    // so a mistap near a form field on a form-heavy slide can't accidentally
+    // fire a slide change. Deliberate navigation still works via the
+    // story-bar segments or the explicit stage buttons.
+    if (!event.target.classList.contains("story-slide")) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const tappedPrev = event.clientX - rect.left < rect.width / 3;
     if (tappedPrev) {
