@@ -38,12 +38,16 @@ def test_index_page_suppresses_native_long_press_context_menu(client):
     assert 'draggable="false"' in response.text
 
 
-def test_new_job_page_contains_multi_file_upload_form(client):
+def test_new_job_page_only_creates_job_and_redirects_to_job_page(client):
+    # Uploading is exclusively job.html's responsibility (the ingestion
+    # slide's "add clip" section) so there is a single upload UI in the app,
+    # not one on this page and a second one on job.html.
     response = client.get("/new-job.html")
     assert response.status_code == 200
-    assert 'id="file-input"' in response.text
-    assert "multiple" in response.text
-    assert 'id="upload-list"' in response.text
+    assert 'id="job-name"' in response.text
+    assert 'id="btn-create"' in response.text
+    assert "/job.html?id=" in response.text
+    assert 'id="file-input"' not in response.text
     assert "local-path" not in response.text
 
 

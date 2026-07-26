@@ -8,69 +8,23 @@
 </head>
 <body>
 <h1>Job nou</h1>
-<p class="subtitle">Alege o sursa video</p>
+<p class="subtitle">Da-i un nume, apoi adauga clipurile video</p>
 
 <div class="card">
   <input type="text" id="job-name" placeholder="Nume job (ex. Curte interioara)" />
-</div>
-
-<div class="card">
-  <div class="job-meta" style="margin-bottom:8px;">Upload video</div>
-  <input type="file" id="file-input" accept="video/*" multiple />
-  <button class="btn" id="btn-upload">Incarca</button>
-  <p class="subtitle" id="upload-status"></p>
-  <div id="upload-list"></div>
+  <button class="btn" id="btn-create">Creeaza job</button>
 </div>
 
 <script src="/js/app.js"></script>
 <script>
-  async function ensureJob() {
+  document.getElementById("btn-create").addEventListener("click", async () => {
     const name = document.getElementById("job-name").value.trim();
     if (!name) {
       alert("Introdu un nume pentru job.");
-      return null;
-    }
-    const job = await apiPost("/jobs", { name });
-    return job.id;
-  }
-
-  document.getElementById("btn-upload").addEventListener("click", async () => {
-    const files = Array.from(document.getElementById("file-input").files);
-    const statusEl = document.getElementById("upload-status");
-    if (files.length === 0) {
-      statusEl.textContent = "Alege cel putin un fisier video.";
       return;
     }
-    statusEl.textContent = "";
-    const jobId = await ensureJob();
-    if (!jobId) return;
-
-    const listEl = document.getElementById("upload-list");
-    listEl.innerHTML = "";
-    const rows = files.map((file) => {
-      const row = document.createElement("div");
-      row.className = "upload-row";
-      row.innerHTML = `
-        <div class="upload-row-name">${escapeHtml(file.name)}</div>
-        <div class="progress-track"><div class="progress-fill" style="width:0%"></div></div>
-      `;
-      listEl.appendChild(row);
-      return row;
-    });
-
-    for (let index = 0; index < files.length; index += 1) {
-      const fill = rows[index].querySelector(".progress-fill");
-      try {
-        await uploadFileToJob(jobId, files[index], (done, total) => {
-          fill.style.width = `${Math.round((done / total) * 100)}%`;
-        });
-        rows[index].classList.add("upload-row-done");
-      } catch (err) {
-        rows[index].classList.add("upload-row-failed");
-      }
-    }
-
-    window.location.href = `/job.html?id=${jobId}`;
+    const job = await apiPost("/jobs", { name });
+    window.location.href = `/job.html?id=${job.id}`;
   });
 </script>
 </body>
