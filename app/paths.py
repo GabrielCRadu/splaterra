@@ -24,5 +24,9 @@ def alignment_dir(job_id: str) -> Path:
     return job_dir(job_id) / "alignment"
 
 
+def training_dir(job_id: str) -> Path:
+    return job_dir(job_id) / "training"
+
+
 def upload_chunks_dir(job_id: str, upload_id: str) -> Path:
     return job_dir(job_id) / "uploads" / upload_id / "chunks"

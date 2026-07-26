@@ -21,3 +21,8 @@ def test_data_root_defaults_to_relative_data_dir(monkeypatch):
 def test_alignment_dir_uses_data_root_env(tmp_path, monkeypatch):
     monkeypatch.setenv("SPLATPREP_DATA_DIR", str(tmp_path))
     assert paths.alignment_dir("abc123") == tmp_path.resolve() / "jobs" / "abc123" / "alignment"
+
+
+def test_training_dir_uses_data_root_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("SPLATPREP_DATA_DIR", str(tmp_path))
+    assert paths.training_dir("abc123") == tmp_path.resolve() / "jobs" / "abc123" / "training"
