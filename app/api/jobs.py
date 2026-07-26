@@ -27,6 +27,8 @@ class JobResponse(BaseModel):
     colmap_sparse_dir: str | None
     undistorted_images_dir: str | None
     splat_path: str | None
+    export_path: str | None
+    export_format: str | None
 
 
 class JobStageResponse(BaseModel):

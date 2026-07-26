@@ -16,7 +16,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     recommendation_json TEXT,
     colmap_sparse_dir TEXT,
     undistorted_images_dir TEXT,
-    splat_path TEXT
+    splat_path TEXT,
+    export_path TEXT,
+    export_format TEXT
 );
 
 CREATE TABLE IF NOT EXISTS job_stages (
@@ -52,4 +54,17 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    # CREATE TABLE IF NOT EXISTS never adds columns to an already-existing
+    # table. Earlier schema changes could just delete the dev DB since it had
+    # no real data yet - data/splatprep.db now holds real trained jobs, so
+    # new nullable columns get an idempotent ALTER TABLE here instead.
+    existing_columns = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)")}
+    for column in ("export_path", "export_format"):
+        if column not in existing_columns:
+            conn.execute(f"ALTER TABLE jobs ADD COLUMN {column} TEXT")
+    conn.commit()

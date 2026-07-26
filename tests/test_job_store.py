@@ -92,6 +92,17 @@ def test_update_job_sets_splat_path(job_store):
     assert fetched.splat_path == "/data/training/output.ply"
 
 
+def test_update_job_sets_export_path_and_format(job_store):
+    job = job_store.create_job("Test")
+    assert job.export_path is None
+    assert job.export_format is None
+
+    job_store.update_job(job.id, export_path="/data/training/export.spz", export_format="spz")
+    fetched = job_store.get_job(job.id)
+    assert fetched.export_path == "/data/training/export.spz"
+    assert fetched.export_format == "spz"
+
+
 def test_upsert_stage_sets_and_preserves_progress_percent(job_store):
     job = job_store.create_job("Test")
 

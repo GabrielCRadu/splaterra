@@ -15,6 +15,8 @@ class Job:
     colmap_sparse_dir: str | None = None
     undistorted_images_dir: str | None = None
     splat_path: str | None = None
+    export_path: str | None = None
+    export_format: str | None = None
 
 
 @dataclass

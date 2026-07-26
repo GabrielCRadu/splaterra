@@ -118,6 +118,15 @@ def test_get_job_includes_splat_path_field(client):
     assert body["splat_path"] is None
 
 
+def test_get_job_includes_export_fields(client):
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+    response = client.get(f"/jobs/{job_id}")
+    body = response.json()
+    assert "export_path" in body
+    assert "export_format" in body
+    assert body["export_path"] is None
+
+
 def test_get_job_stages_includes_progress_percent(client):
     from app import db
     from app.job_store import JobStore

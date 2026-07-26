@@ -102,6 +102,8 @@ class JobStore:
             colmap_sparse_dir=row["colmap_sparse_dir"],
             undistorted_images_dir=row["undistorted_images_dir"],
             splat_path=row["splat_path"],
+            export_path=row["export_path"],
+            export_format=row["export_format"],
         )
 
     @staticmethod

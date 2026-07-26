@@ -1,3 +1,5 @@
+import sqlite3
+
 from app import db
 
 
@@ -8,4 +10,46 @@ def test_connect_creates_schema(tmp_path):
         for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
     }
     assert {"jobs", "job_stages"} <= tables
+    conn.close()
+
+
+def test_connect_migrates_old_schema_without_losing_data(tmp_path):
+    # Simulates data/splatprep.db as it existed before export_path/export_format
+    # were added - connect() must add the missing columns in place rather than
+    # requiring the file to be deleted, since it can hold real trained jobs.
+    path = tmp_path / "old.db"
+    old_conn = sqlite3.connect(path)
+    old_conn.execute(
+        """
+        CREATE TABLE jobs (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            raw_video_path TEXT,
+            frames_dir TEXT,
+            frame_count INTEGER,
+            recommendation_json TEXT,
+            colmap_sparse_dir TEXT,
+            undistorted_images_dir TEXT,
+            splat_path TEXT
+        )
+        """
+    )
+    old_conn.execute(
+        "INSERT INTO jobs (id, name, created_at, splat_path) VALUES (?, ?, ?, ?)",
+        ("job-1", "MasinaPoarta", "2026-07-26T10:10:33+00:00", "training/splat_30000.ply"),
+    )
+    old_conn.commit()
+    old_conn.close()
+
+    conn = db.connect(path)
+
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)")}
+    assert "export_path" in columns
+    assert "export_format" in columns
+
+    row = conn.execute("SELECT * FROM jobs WHERE id = ?", ("job-1",)).fetchone()
+    assert row["name"] == "MasinaPoarta"
+    assert row["splat_path"] == "training/splat_30000.ply"
+    assert row["export_path"] is None
     conn.close()
