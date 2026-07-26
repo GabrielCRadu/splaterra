@@ -95,10 +95,21 @@ function initCustomSelect(select) {
 
   const panel = document.createElement("div");
   panel.className = "custom-select-panel";
+  // Positioned as a fixed-position portal on document.body (not a child of
+  // wrapper) so it escapes any ancestor with overflow:hidden - e.g. the
+  // story-view carousel's .story-viewport, which needs overflow:hidden for
+  // its own paging mechanism and would otherwise clip the open dropdown.
 
   function labelFor(value) {
     const match = Array.from(select.options).find((opt) => opt.value === value);
     return match ? match.textContent : "";
+  }
+
+  function positionPanel() {
+    const rect = trigger.getBoundingClientRect();
+    panel.style.left = `${rect.left}px`;
+    panel.style.top = `${rect.bottom + 6}px`;
+    panel.style.width = `${rect.width}px`;
   }
 
   function close() {
@@ -128,6 +139,7 @@ function initCustomSelect(select) {
 
   function open() {
     renderOptions();
+    positionPanel();
     panel.classList.add("open");
     trigger.classList.add("open");
   }
@@ -146,7 +158,7 @@ function initCustomSelect(select) {
   });
 
   document.addEventListener("click", (event) => {
-    if (!wrapper.contains(event.target)) {
+    if (!wrapper.contains(event.target) && !panel.contains(event.target)) {
       close();
     }
   });
@@ -157,10 +169,21 @@ function initCustomSelect(select) {
     }
   });
 
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (panel.classList.contains("open")) positionPanel();
+    },
+    true
+  );
+  window.addEventListener("resize", () => {
+    if (panel.classList.contains("open")) positionPanel();
+  });
+
   sync();
   wrapper.appendChild(trigger);
-  wrapper.appendChild(panel);
   select.insertAdjacentElement("afterend", wrapper);
+  document.body.appendChild(panel);
 
   return { sync };
 }

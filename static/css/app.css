@@ -373,16 +373,16 @@ input[type="text"]:focus, select:focus {
 .custom-select-trigger.open .custom-select-arrow { transform: rotate(180deg); }
 
 .custom-select-panel {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
+  /* position: fixed (not absolute) + JS-computed left/top/width (see
+     initCustomSelect in app.js) - a body-level portal that escapes any
+     ancestor with overflow:hidden, e.g. .story-viewport's carousel clipping. */
+  position: fixed;
   background: linear-gradient(180deg, #1a1a1c 0%, #131315 100%);
   border: 1px solid var(--hairline);
   border-radius: 16px;
   padding: 6px;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-  z-index: 50;
+  z-index: 300;
   max-height: 260px;
   overflow-y: auto;
   opacity: 0;
@@ -437,6 +437,13 @@ input[type="text"]:focus, select:focus {
   transition: width 0.4s var(--ease-spring);
 }
 .story-bar-segment.active .story-bar-fill { box-shadow: 0 0 14px var(--accent-green-glow); }
+.story-bar-fill.indeterminate {
+  width: 40%;
+  animation: progress-slide 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .story-bar-fill.indeterminate { animation: none; width: 100%; opacity: 0.4; }
+}
 
 .story-viewport {
   overflow: hidden;
