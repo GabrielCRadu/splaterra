@@ -65,6 +65,21 @@ def probe_video(video_path: Path) -> VideoMetadata:
     )
 
 
+def aggregate_metadata(metadatas: list[VideoMetadata]) -> VideoMetadata:
+    # For a multi-clip job, duration_seconds is summed (recommend_extraction uses total
+    # duration to pick fps/frame count) and width/height take the max across clips (the
+    # RealityScan downscale decision should account for the highest-resolution clip
+    # present). fps/codec are informational only - app/recommendation.py's recommend()
+    # doesn't use them - so the first clip's values are kept rather than aggregated.
+    return VideoMetadata(
+        width=max(m.width for m in metadatas),
+        height=max(m.height for m in metadatas),
+        fps=metadatas[0].fps,
+        duration_seconds=sum(m.duration_seconds for m in metadatas),
+        codec=metadatas[0].codec,
+    )
+
+
 def _parse_frame_rate(raw: str) -> float:
     numerator, _, denominator = raw.partition("/")
     denom = float(denominator) if denominator else 1.0

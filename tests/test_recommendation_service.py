@@ -112,6 +112,46 @@ def test_compute_recommendation_marks_stage_failed_on_untyped_error(
     assert stage.error == "could not convert string to float: 'N/A'"
 
 
+def test_compute_recommendation_aggregates_duration_across_multiple_clips(
+    job_store, tmp_path, monkeypatch
+):
+    from app.paths import raw_dir
+
+    job = job_store.create_job("Test")
+    directory = raw_dir(job.id)
+    directory.mkdir(parents=True, exist_ok=True)
+    clip_a = directory / "a_clip.mp4"
+    clip_b = directory / "b_clip.mp4"
+    clip_a.write_bytes(b"fake")
+    clip_b.write_bytes(b"fake")
+    job_store.update_job(job.id, raw_video_path=str(clip_a))
+
+    probed = {
+        str(clip_a): VideoMetadata(width=1920, height=1080, fps=30.0, duration_seconds=10.0, codec="h264"),
+        str(clip_b): VideoMetadata(width=1280, height=720, fps=30.0, duration_seconds=20.0, codec="h264"),
+    }
+    captured = {}
+
+    def fake_probe_video(path):
+        return probed[str(path)]
+
+    monkeypatch.setattr(recommendation_service, "probe_video", fake_probe_video)
+    monkeypatch.setattr(recommendation_service, "detect_hardware", MagicMock(
+        return_value=HardwareInfo(gpu=None, cpu_cores=8, ram_gb=16.0)
+    ))
+
+    def fake_recommend(video, drone, hardware):
+        captured["video"] = video
+        return FAKE_RECOMMENDATION
+
+    monkeypatch.setattr(recommendation_service, "recommend", fake_recommend)
+
+    recommendation_service.compute_recommendation(job_store, job.id)
+
+    assert captured["video"].duration_seconds == 30.0
+    assert captured["video"].width == 1920
+
+
 def test_compute_recommendation_marks_stage_failed_on_srt_parse_error(
     job_store, tmp_path, monkeypatch
 ):

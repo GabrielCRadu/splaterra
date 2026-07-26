@@ -7,9 +7,10 @@ from pathlib import Path
 
 from app.drone_telemetry import parse_srt
 from app.hardware import detect_hardware
+from app.ingestion import list_raw_videos
 from app.job_store import JobStore
 from app.recommendation import Recommendation, recommend
-from app.video_metadata import probe_video
+from app.video_metadata import aggregate_metadata, probe_video
 
 
 class RecommendationError(Exception):
@@ -39,7 +40,17 @@ def compute_recommendation(
 
     store.upsert_stage(job_id, "recommendation", "running", started_at=_now())
     try:
-        video_meta = probe_video(Path(job.raw_video_path))
+        # Multiple raw video files on disk means a multi-clip job (see
+        # app/extraction.py) - duration is summed across all clips so
+        # recommend_extraction picks fps/frame-count for the full footage, not
+        # just whichever file happens to be raw_video_path. Single-clip jobs
+        # (0 or 1 real file found, including tests that set raw_video_path
+        # without creating a real file) fall back to the original behavior.
+        videos = list_raw_videos(job_id)
+        if len(videos) > 1:
+            video_meta = aggregate_metadata([probe_video(video) for video in videos])
+        else:
+            video_meta = probe_video(Path(job.raw_video_path))
         drone = parse_srt(srt_path) if srt_path is not None else None
         hardware = detect_hardware()
         recommendation = recommend(video_meta, drone, hardware)
