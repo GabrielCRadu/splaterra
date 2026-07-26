@@ -57,7 +57,22 @@
     return `<div class="progress-track"><div class="progress-indeterminate"></div></div>`;
   }
 
+  const expandedLogs = new Set();
+  let lastStages = [];
+
+  function logPanelHtml(stage) {
+    if (!stage.log) return "";
+    const isOpen = expandedLogs.has(stage.stage);
+    return `
+      <button class="btn-ghost log-toggle" type="button" data-stage="${stage.stage}" style="margin-top:8px;">
+        ${isOpen ? "Ascunde output CLI" : "Vezi output CLI"}
+      </button>
+      ${isOpen ? `<pre class="log-output">${escapeHtml(stage.log)}</pre>` : ""}
+    `;
+  }
+
   function renderStages(stages) {
+    lastStages = stages;
     const list = document.getElementById("stage-list");
     if (stages.length === 0) {
       list.innerHTML = '<p class="empty">Niciun pas pornit inca.</p>';
@@ -74,6 +89,7 @@
               <div class="job-name">${STAGE_LABELS[s.stage] || s.stage}</div>
               ${errorLine}
               ${progressBarHtml(s)}
+              ${logPanelHtml(s)}
             </div>
             <span class="pill ${pillClass}">${s.status}</span>
           </div>
@@ -216,6 +232,18 @@
     refresh();
     stopPolling();
     stopPolling = startPolling();
+  });
+
+  document.getElementById("stage-list").addEventListener("click", (event) => {
+    const toggle = event.target.closest(".log-toggle");
+    if (!toggle) return;
+    const stageName = toggle.dataset.stage;
+    if (expandedLogs.has(stageName)) {
+      expandedLogs.delete(stageName);
+    } else {
+      expandedLogs.add(stageName);
+    }
+    renderStages(lastStages);
   });
 
   refresh();

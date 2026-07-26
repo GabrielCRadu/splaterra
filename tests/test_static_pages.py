@@ -135,3 +135,10 @@ def test_job_page_contains_train_button_and_download_link(client):
     assert response.status_code == 200
     assert 'id="btn-train"' in response.text
     assert 'id="link-training"' in response.text
+
+
+def test_job_page_contains_log_output_toggle(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert "log-toggle" in response.text
+    assert "log-output" in response.text
