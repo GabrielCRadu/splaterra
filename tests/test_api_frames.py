@@ -25,6 +25,34 @@ def test_extract_frames_endpoint_unknown_job_returns_404(client):
     assert response.status_code == 404
 
 
+def test_import_frames_endpoint_returns_202_and_invokes_import(client, monkeypatch, tmp_path):
+    from app.api import frames as frames_api
+
+    calls = []
+
+    def fake_import_local_frames(store, job_id, source_dir):
+        calls.append((job_id, source_dir))
+        return 5
+
+    monkeypatch.setattr(frames_api, "import_local_frames", fake_import_local_frames)
+
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+
+    response = client.post(
+        f"/jobs/{job_id}/import-frames", json={"source_path": str(tmp_path / "frames")}
+    )
+    assert response.status_code == 202
+    assert response.json() == {"status": "started"}
+    assert calls == [(job_id, tmp_path / "frames")]
+
+
+def test_import_frames_endpoint_unknown_job_returns_404(client, tmp_path):
+    response = client.post(
+        "/jobs/does-not-exist/import-frames", json={"source_path": str(tmp_path)}
+    )
+    assert response.status_code == 404
+
+
 def test_list_frames_returns_empty_when_not_extracted_yet(client):
     job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
     response = client.get(f"/jobs/{job_id}/frames")
