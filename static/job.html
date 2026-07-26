@@ -240,7 +240,7 @@
   }
 
   let extractSettingsLoaded = false;
-  const EXTRACT_DEFAULTS = { fps: 10, num_frames: 300, selection_method: "best-n" };
+  const EXTRACT_DEFAULTS = { fps: 10, num_frames: 300, selection_method: "batched" };
 
   async function loadExtractSettingsDefaults() {
     if (extractSettingsLoaded) return;

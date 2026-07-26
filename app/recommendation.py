@@ -65,7 +65,12 @@ def recommend_extraction(video: VideoMetadata) -> ExtractionSettings:
     target = round(total_sampled * EXTRACTION_SELECTION_RATIO)
     num_frames = int(min(EXTRACTION_MAX_FRAMES, max(EXTRACTION_MIN_FRAMES, target)))
     num_frames = min(num_frames, int(total_sampled))
-    return ExtractionSettings(fps=fps, num_frames=num_frames, selection_method="best-n")
+    # "batched" (sharp-frames' own default batch_size=5/batch_buffer=2) matches
+    # reflct.app's own capture guide for 3DGS: extract at >=10fps, pick the
+    # sharpest frame per batch of 5 - one frame per ~0.5s of footage, ~80%
+    # overlap between selections. num_frames stays computed for display/
+    # informational purposes but is unused by run_extraction for this method.
+    return ExtractionSettings(fps=fps, num_frames=num_frames, selection_method="batched")
 
 
 def recommend(

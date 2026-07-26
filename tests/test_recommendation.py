@@ -94,7 +94,7 @@ def test_recommend_extraction_short_clip_uses_max_fps_and_min_frames():
     settings = recommend_extraction(video)
     assert settings.fps == 10
     assert settings.num_frames == 80
-    assert settings.selection_method == "best-n"
+    assert settings.selection_method == "batched"
 
 
 def test_recommend_extraction_very_short_clip_caps_frames_to_what_exists():
