@@ -24,7 +24,11 @@ Backlog de idei, in orice ordine. Adaugat de owner, de rezolvat de Claude in ses
       "batched" (batch_size=5, batch_buffer=2, la >=10fps) — n-a fost nevoie de flag-uri noi, doar
       schimbat default-ul in `app/recommendation.py::recommend_extraction()` si in
       `EXTRACT_DEFAULTS` din `static/job.html`. Facut in `5954c1c`.
-- [ ] Posibilitatea de a incarca direct cadre deja extrase (skip peste extragerea automata).
+- [x] Posibilitatea de a incarca direct cadre deja extrase (skip peste extragerea automata).
+      Cale locala catre un folder (la fel ca ingestia de video local) — sectiune noua pe pagina
+      jobului, `POST /jobs/{id}/import-frames`, marcheaza stage-ul `frame_extraction` ca `done`
+      direct, fara sa treaca prin `sharp-frames`. Independent de ingestia video — merge si fara
+      video ingerat. Facut in `a6baba8` (si commit-urile precedente din aceeasi sesiune).
 - [x] Posibilitatea de a adauga mai mult de un clip video per job. `sharp-frames` suporta nativ
       un director cu mai multe video-uri (auto-detectat) — extragerea trimite `raw_dir(job_id)`
       in loc de un fisier cand sunt 2+ clipuri ingerate, iar recomandarea insumeaza durata pe
