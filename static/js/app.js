@@ -51,6 +51,33 @@ function pollStages(jobId, onUpdate, intervalMs) {
   };
 }
 
+const UPLOAD_CHUNK_SIZE = 8 * 1024 * 1024;
+
+async function uploadFileToJob(jobId, file, onProgress) {
+  const totalChunks = Math.ceil(file.size / UPLOAD_CHUNK_SIZE);
+  const { upload_id: uploadId } = await apiPost(`/jobs/${jobId}/uploads`, {
+    filename: file.name,
+    total_chunks: totalChunks,
+  });
+
+  for (let index = 0; index < totalChunks; index += 1) {
+    const start = index * UPLOAD_CHUNK_SIZE;
+    const chunk = file.slice(start, start + UPLOAD_CHUNK_SIZE);
+    const response = await fetch(
+      `/jobs/${jobId}/uploads/${uploadId}/chunks/${index}`,
+      { method: "PUT", body: chunk }
+    );
+    if (!response.ok) {
+      throw new Error(`Chunk ${index} failed: ${response.status}`);
+    }
+    if (onProgress) {
+      onProgress(index + 1, totalChunks);
+    }
+  }
+
+  await apiPost(`/jobs/${jobId}/uploads/${uploadId}/complete`, {});
+}
+
 function pollUsage(onUpdate, intervalMs) {
   intervalMs = intervalMs || 2000;
   let stopped = false;

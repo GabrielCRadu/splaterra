@@ -117,9 +117,10 @@ def test_job_page_restarts_polling_after_each_action():
     content = (Path(__file__).resolve().parent.parent / "static" / "job.html").read_text(
         encoding="utf-8"
     )
-    # 1 initial assignment (`let stopPolling = startPolling()`) + 5 button
-    # handlers (extract/align/recommend/train/export) each reassigning it after apiPost.
-    assert content.count("stopPolling = startPolling()") == 6
+    # 1 initial assignment (`let stopPolling = startPolling()`) + 7 button
+    # handlers (add-clip-local/add-clip-upload/extract/align/recommend/train/export)
+    # each reassigning it after apiPost.
+    assert content.count("stopPolling = startPolling()") == 8
 
 
 def test_job_page_contains_progress_bar_styles_and_render_hook(client):
@@ -159,6 +160,16 @@ def test_job_page_contains_variable_exposure_checkbox(client):
     assert response.status_code == 200
     assert 'id="train-variable-exposure"' in response.text
     assert 'type="checkbox"' in response.text
+
+
+def test_job_page_contains_add_clip_section(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert 'id="raw-videos-list"' in response.text
+    assert 'id="add-clip-local-path"' in response.text
+    assert 'id="btn-add-clip-local"' in response.text
+    assert 'id="add-clip-file-input"' in response.text
+    assert 'id="btn-add-clip-upload"' in response.text
 
 
 def test_job_page_contains_export_controls(client):

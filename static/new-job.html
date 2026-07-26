@@ -51,32 +51,6 @@
     window.location.href = `/job.html?id=${jobId}`;
   });
 
-  const CHUNK_SIZE = 8 * 1024 * 1024;
-
-  async function uploadFile(jobId, file) {
-    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-    const { upload_id: uploadId } = await apiPost(`/jobs/${jobId}/uploads`, {
-      filename: file.name,
-      total_chunks: totalChunks,
-    });
-
-    for (let index = 0; index < totalChunks; index += 1) {
-      const start = index * CHUNK_SIZE;
-      const chunk = file.slice(start, start + CHUNK_SIZE);
-      const response = await fetch(
-        `/jobs/${jobId}/uploads/${uploadId}/chunks/${index}`,
-        { method: "PUT", body: chunk }
-      );
-      if (!response.ok) {
-        throw new Error(`Chunk ${index} failed: ${response.status}`);
-      }
-      document.getElementById("upload-status").textContent =
-        `Se incarca... ${index + 1}/${totalChunks}`;
-    }
-
-    await apiPost(`/jobs/${jobId}/uploads/${uploadId}/complete`, {});
-  }
-
   document.getElementById("btn-upload").addEventListener("click", async () => {
     const jobId = await ensureJob();
     if (!jobId) return;
@@ -86,7 +60,9 @@
       return;
     }
     document.getElementById("upload-status").textContent = "Se incarca...";
-    await uploadFile(jobId, file);
+    await uploadFileToJob(jobId, file, (done, total) => {
+      document.getElementById("upload-status").textContent = `Se incarca... ${done}/${total}`;
+    });
     window.location.href = `/job.html?id=${jobId}`;
   });
 </script>
