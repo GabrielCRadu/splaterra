@@ -23,6 +23,7 @@ Backlog de idei, in orice ordine. Adaugat de owner, de rezolvat de Claude in ses
 - [x] Buton "advanced view" (per stage sau global pe job) ca sa vezi output-ul brut al CLI-urilor
       RealityScan si LichtFeld. Toggle per stage in `static/job.html`, expune `job_stages.log`
       (deja salvat, doar nu era afisat). Facut in `3c46de4`.
-- [ ] Vizualizare usage CPU / GPU / VRAM GPU / RAM al computerului in timp real, pe parcursul
-      procesarii (extragere, alignment, training) — utila mai ales la training, unde owner-ul
-      lucreaza des prin remote access si nu poate verifica altfel daca GPU-ul e efectiv folosit.
+- [x] Vizualizare usage CPU / GPU / VRAM GPU / RAM al computerului in timp real, pe parcursul
+      procesarii (extragere, alignment, training). Panou live in `static/job.html`, vizibil cat
+      timp un stage ruleaza; endpoint nou `GET /hardware/usage` (`app/hardware.py`). Facut in
+      `6b76428`.
