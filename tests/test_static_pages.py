@@ -38,11 +38,13 @@ def test_index_page_suppresses_native_long_press_context_menu(client):
     assert 'draggable="false"' in response.text
 
 
-def test_new_job_page_contains_local_and_upload_forms(client):
+def test_new_job_page_contains_multi_file_upload_form(client):
     response = client.get("/new-job.html")
     assert response.status_code == 200
-    assert 'id="local-path"' in response.text
     assert 'id="file-input"' in response.text
+    assert "multiple" in response.text
+    assert 'id="upload-list"' in response.text
+    assert "local-path" not in response.text
 
 
 def test_job_page_contains_story_view_and_action_buttons(client):

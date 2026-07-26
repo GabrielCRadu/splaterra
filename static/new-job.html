@@ -15,16 +15,11 @@
 </div>
 
 <div class="card">
-  <div class="job-meta" style="margin-bottom:8px;">Fisier local pe acest PC</div>
-  <input type="text" id="local-path" placeholder="Cale completa (ex. C:\Videos\clip.mp4)" />
-  <button class="btn" id="btn-local">Foloseste fisier local</button>
-</div>
-
-<div class="card">
-  <div class="job-meta" style="margin-bottom:8px;">Upload de pe telefon</div>
-  <input type="file" id="file-input" accept="video/*" />
+  <div class="job-meta" style="margin-bottom:8px;">Upload video</div>
+  <input type="file" id="file-input" accept="video/*" multiple />
   <button class="btn" id="btn-upload">Incarca</button>
   <p class="subtitle" id="upload-status"></p>
+  <div id="upload-list"></div>
 </div>
 
 <script src="/js/app.js"></script>
@@ -39,30 +34,42 @@
     return job.id;
   }
 
-  document.getElementById("btn-local").addEventListener("click", async () => {
-    const jobId = await ensureJob();
-    if (!jobId) return;
-    const sourcePath = document.getElementById("local-path").value.trim();
-    if (!sourcePath) {
-      alert("Introdu o cale de fisier.");
-      return;
-    }
-    await apiPost(`/jobs/${jobId}/ingest/local`, { source_path: sourcePath });
-    window.location.href = `/job.html?id=${jobId}`;
-  });
-
   document.getElementById("btn-upload").addEventListener("click", async () => {
-    const jobId = await ensureJob();
-    if (!jobId) return;
-    const file = document.getElementById("file-input").files[0];
-    if (!file) {
-      alert("Alege un fisier video.");
+    const files = Array.from(document.getElementById("file-input").files);
+    const statusEl = document.getElementById("upload-status");
+    if (files.length === 0) {
+      statusEl.textContent = "Alege cel putin un fisier video.";
       return;
     }
-    document.getElementById("upload-status").textContent = "Se incarca...";
-    await uploadFileToJob(jobId, file, (done, total) => {
-      document.getElementById("upload-status").textContent = `Se incarca... ${done}/${total}`;
+    statusEl.textContent = "";
+    const jobId = await ensureJob();
+    if (!jobId) return;
+
+    const listEl = document.getElementById("upload-list");
+    listEl.innerHTML = "";
+    const rows = files.map((file) => {
+      const row = document.createElement("div");
+      row.className = "upload-row";
+      row.innerHTML = `
+        <div class="upload-row-name">${escapeHtml(file.name)}</div>
+        <div class="progress-track"><div class="progress-fill" style="width:0%"></div></div>
+      `;
+      listEl.appendChild(row);
+      return row;
     });
+
+    for (let index = 0; index < files.length; index += 1) {
+      const fill = rows[index].querySelector(".progress-fill");
+      try {
+        await uploadFileToJob(jobId, files[index], (done, total) => {
+          fill.style.width = `${Math.round((done / total) * 100)}%`;
+        });
+        rows[index].classList.add("upload-row-done");
+      } catch (err) {
+        rows[index].classList.add("upload-row-failed");
+      }
+    }
+
     window.location.href = `/job.html?id=${jobId}`;
   });
 </script>
