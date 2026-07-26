@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 
+from app.hardware import UsageSnapshot, detect_hardware, sample_usage
 from app.job_store import JobStore
 from app.lichtfeld import TrainingResult, run_training
 from app.paths import alignment_dir, training_dir
+from app.training_metrics import TrainingMetrics, append_training_metrics, parse_training_log
+
+logger = logging.getLogger(__name__)
 
 
 class TrainingError(Exception):
@@ -25,7 +30,59 @@ def _max_gaussians_from_recommendation(recommendation_json: str | None) -> int |
         return None
 
 
-def compute_training(store: JobStore, job_id: str) -> TrainingResult:
+def _log_training_metrics(
+    job_id: str,
+    *,
+    status: str,
+    error: str | None,
+    log: str,
+    variable_exposure: bool,
+    max_gaussians: int | None,
+    usage_samples: list[UsageSnapshot],
+) -> None:
+    # Diagnostic data for calibrating app/recommendation.py's constants (see
+    # docs/ISSUES.md) - must never mask the real training outcome, so any
+    # failure here is logged and swallowed rather than raised.
+    try:
+        parsed = parse_training_log(log) if log else dict.fromkeys(
+            (
+                "num_images",
+                "num_initial_points",
+                "sh_degree",
+                "iterations_configured",
+                "final_gaussians",
+                "duration_seconds",
+                "avg_iter_per_sec",
+            )
+        )
+        hardware = detect_hardware()
+        vram_values = [s.vram_used_mb for s in usage_samples if s.vram_used_mb is not None]
+        cpu_values = [s.cpu_percent for s in usage_samples]
+        ram_values = [s.ram_used_gb for s in usage_samples]
+
+        metrics = TrainingMetrics(
+            job_id=job_id,
+            timestamp=_now(),
+            status=status,
+            error=error,
+            variable_exposure=variable_exposure,
+            requested_max_gaussians=max_gaussians,
+            gpu_name=hardware.gpu.name if hardware.gpu else None,
+            vram_total_mb=hardware.gpu.vram_mb if hardware.gpu else None,
+            vram_peak_used_mb=max(vram_values) if vram_values else None,
+            vram_avg_used_mb=int(sum(vram_values) / len(vram_values)) if vram_values else None,
+            cpu_peak_percent=max(cpu_values) if cpu_values else None,
+            ram_peak_used_gb=max(ram_values) if ram_values else None,
+            **parsed,
+        )
+        append_training_metrics(metrics)
+    except Exception:
+        logger.exception("Failed to log training metrics for job %s (non-fatal)", job_id)
+
+
+def compute_training(
+    store: JobStore, job_id: str, *, variable_exposure: bool = False
+) -> TrainingResult:
     job = store.get_job(job_id)
     if job is None:
         # No stage write: job_stages.job_id has a foreign-key reference to
@@ -49,17 +106,46 @@ def compute_training(store: JobStore, job_id: str) -> TrainingResult:
 
     store.upsert_stage(job_id, "training", "running", started_at=_now())
 
+    usage_samples: list[UsageSnapshot] = []
+
     def report_progress(percent: float) -> None:
         store.upsert_stage(job_id, "training", "running", progress_percent=percent)
+        try:
+            usage_samples.append(sample_usage())
+        except Exception:
+            # Best-effort diagnostic sampling must never break a real training run.
+            logger.exception("Failed to sample hardware usage during training (non-fatal)")
 
     try:
         result = run_training(
-            data_path, output_dir, max_gaussians=max_gaussians, on_progress=report_progress
+            data_path,
+            output_dir,
+            max_gaussians=max_gaussians,
+            bilateral_grid=variable_exposure,
+            on_progress=report_progress,
         )
     except Exception as exc:
         store.upsert_stage(job_id, "training", "failed", finished_at=_now(), error=str(exc))
+        _log_training_metrics(
+            job_id,
+            status="failed",
+            error=str(exc),
+            log="",
+            variable_exposure=variable_exposure,
+            max_gaussians=max_gaussians,
+            usage_samples=usage_samples,
+        )
         raise TrainingError(str(exc)) from exc
 
     store.update_job(job_id, splat_path=str(result.splat_path))
     store.upsert_stage(job_id, "training", "done", finished_at=_now(), log=result.log)
+    _log_training_metrics(
+        job_id,
+        status="done",
+        error=None,
+        log=result.log,
+        variable_exposure=variable_exposure,
+        max_gaussians=max_gaussians,
+        usage_samples=usage_samples,
+    )
     return result
