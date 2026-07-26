@@ -28,5 +28,19 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+class NoCacheStaticFiles(StaticFiles):
+    # The UI shell (HTML/CSS/JS) gets edited and re-served constantly during
+    # development, but the owner mostly tests from a phone over Tailscale and
+    # won't reliably hard-refresh - a browser silently reusing a stale cached
+    # copy without revalidating looks identical to a real bug (e.g. a
+    # function "not defined" that has been on disk the whole time). Forcing
+    # revalidation on every request keeps ETags doing their job (fast 304s)
+    # while guaranteeing the served code is never silently out of date.
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 _STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
-app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")
+app.mount("/", NoCacheStaticFiles(directory=_STATIC_DIR, html=True), name="static")
