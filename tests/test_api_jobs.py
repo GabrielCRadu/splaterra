@@ -110,6 +110,14 @@ def test_delete_job_blocked_while_stage_running(client):
     assert client.get(f"/jobs/{job_id}").status_code == 200
 
 
+def test_get_job_includes_splat_path_field(client):
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+    response = client.get(f"/jobs/{job_id}")
+    body = response.json()
+    assert "splat_path" in body
+    assert body["splat_path"] is None
+
+
 def test_get_job_stages_includes_progress_percent(client):
     from app import db
     from app.job_store import JobStore

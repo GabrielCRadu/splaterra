@@ -83,6 +83,15 @@ def test_update_job_sets_colmap_sparse_and_undistorted_images_dirs(job_store):
     assert fetched.undistorted_images_dir == "/data/alignment/images"
 
 
+def test_update_job_sets_splat_path(job_store):
+    job = job_store.create_job("Test")
+    assert job.splat_path is None
+
+    job_store.update_job(job.id, splat_path="/data/training/output.ply")
+    fetched = job_store.get_job(job.id)
+    assert fetched.splat_path == "/data/training/output.ply"
+
+
 def test_upsert_stage_sets_and_preserves_progress_percent(job_store):
     job = job_store.create_job("Test")
 

@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     frame_count INTEGER,
     recommendation_json TEXT,
     colmap_sparse_dir TEXT,
-    undistorted_images_dir TEXT
+    undistorted_images_dir TEXT,
+    splat_path TEXT
 );
 
 CREATE TABLE IF NOT EXISTS job_stages (

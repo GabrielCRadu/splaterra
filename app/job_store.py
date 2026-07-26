@@ -101,6 +101,7 @@ class JobStore:
             recommendation_json=row["recommendation_json"],
             colmap_sparse_dir=row["colmap_sparse_dir"],
             undistorted_images_dir=row["undistorted_images_dir"],
+            splat_path=row["splat_path"],
         )
 
     @staticmethod

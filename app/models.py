@@ -14,6 +14,7 @@ class Job:
     recommendation_json: str | None = None
     colmap_sparse_dir: str | None = None
     undistorted_images_dir: str | None = None
+    splat_path: str | None = None
 
 
 @dataclass

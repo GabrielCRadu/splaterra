@@ -26,6 +26,7 @@ class JobResponse(BaseModel):
     recommendation_json: str | None
     colmap_sparse_dir: str | None
     undistorted_images_dir: str | None
+    splat_path: str | None
 
 
 class JobStageResponse(BaseModel):
