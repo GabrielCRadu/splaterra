@@ -41,3 +41,5 @@ Backlog de idei, in orice ordine. Adaugat de owner, de rezolvat de Claude in ses
       procesarii (extragere, alignment, training). Panou live in `static/job.html`, vizibil cat
       timp un stage ruleaza; endpoint nou `GET /hardware/usage` (`app/hardware.py`). Facut in
       `6b76428`.
+- [ ] ETA (timp estimat ramas) pentru alignment si training, afisat langa bara de progres cat timp
+      stage-ul ruleaza.
