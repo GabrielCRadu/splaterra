@@ -106,6 +106,13 @@ def test_job_page_contains_extraction_settings_panel(client):
     assert 'id="btn-extract-settings-toggle"' in response.text
 
 
+def test_job_page_contains_video_info_hint(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert 'id="video-info-hint"' in response.text
+    assert "/video-info" in response.text
+
+
 def test_job_page_restarts_polling_after_each_action():
     # Regression test: polling used to be a one-shot pollStages() call that
     # permanently stopped itself once no stage was "running". If a user

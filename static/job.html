@@ -33,6 +33,7 @@
 <div id="extract-settings-block" style="display:none;">
   <button class="btn-ghost" id="btn-extract-settings-toggle" type="button">&#9881;&#65039; Setari extragere</button>
   <div class="card" id="extract-settings-panel" style="display:none;">
+    <p class="subtitle" id="video-info-hint" style="margin:0 0 12px;"></p>
     <label class="settings-label" for="extract-fps">Cadre pe secunda esantionate (fps)</label>
     <input type="text" inputmode="numeric" id="extract-fps" />
     <label class="settings-label" for="extract-num-frames">Numar cadre finale (cele mai clare)</label>
@@ -261,6 +262,15 @@
     document.getElementById("extract-num-frames").value = extraction.num_frames;
     document.getElementById("extract-method").value = extraction.selection_method;
     document.getElementById("extract-settings-hint").textContent = hint;
+
+    const videoInfoHint = document.getElementById("video-info-hint");
+    try {
+      const info = await apiGet(`/jobs/${jobId}/video-info`);
+      videoInfoHint.textContent =
+        `Clip: ${info.total_frames} cadre in total, la ${info.fps.toFixed(2)} fps.`;
+    } catch (err) {
+      videoInfoHint.textContent = "";
+    }
   }
 
   document.getElementById("btn-extract-settings-toggle").addEventListener("click", async () => {
