@@ -87,6 +87,42 @@ def test_run_training_includes_max_cap_flag_when_given(tmp_path, monkeypatch):
     assert captured["command"][index + 1] == "2000000"
 
 
+def test_run_training_omits_bilateral_grid_flag_by_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+    output_dir = tmp_path / "out"
+    captured = {}
+
+    def fake_popen(command, stdout, stderr, text, bufsize):
+        captured["command"] = command
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "result.ply").write_bytes(b"fake ply")
+        return _make_process_with_output(process=_fake_popen_result(0), text="")
+
+    monkeypatch.setattr(lichtfeld.subprocess, "Popen", fake_popen)
+
+    lichtfeld.run_training(tmp_path / "data", output_dir)
+
+    assert "--bilateral-grid" not in captured["command"]
+
+
+def test_run_training_includes_bilateral_grid_flag_when_requested(tmp_path, monkeypatch):
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+    output_dir = tmp_path / "out"
+    captured = {}
+
+    def fake_popen(command, stdout, stderr, text, bufsize):
+        captured["command"] = command
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "result.ply").write_bytes(b"fake ply")
+        return _make_process_with_output(process=_fake_popen_result(0), text="")
+
+    monkeypatch.setattr(lichtfeld.subprocess, "Popen", fake_popen)
+
+    lichtfeld.run_training(tmp_path / "data", output_dir, bilateral_grid=True)
+
+    assert "--bilateral-grid" in captured["command"]
+
+
 def test_run_training_picks_most_recently_modified_ply_or_sog(tmp_path, monkeypatch):
     monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
     output_dir = tmp_path / "out"

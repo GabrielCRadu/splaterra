@@ -88,6 +88,7 @@ def run_training(
     output_dir: Path,
     *,
     max_gaussians: int | None = None,
+    bilateral_grid: bool = False,
     timeout_seconds: int = 7200,
     on_progress: Callable[[float], None] | None = None,
 ) -> TrainingResult:
@@ -95,8 +96,8 @@ def run_training(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # --headless --train together start training immediately with no GUI and
-    # exit when done, per the CLI's own --help semantics - not yet confirmed
-    # against a real training run.
+    # exit when done - confirmed against a real 30000-iteration training run
+    # (see docs/ISSUES.md).
     command = [
         binary,
         "--headless",
@@ -108,6 +109,12 @@ def run_training(
     ]
     if max_gaussians is not None:
         command += ["--max-cap", str(max_gaussians)]
+    if bilateral_grid:
+        # Compensates for per-image exposure/white-balance variation during
+        # training (auto-exposure cameras, clips shot under different
+        # settings) - the bilateral grid appearance-correction technique from
+        # recent Gaussian Splatting/NeRF literature.
+        command.append("--bilateral-grid")
 
     process = subprocess.Popen(
         command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
