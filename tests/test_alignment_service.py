@@ -82,7 +82,7 @@ def test_compute_alignment_forwards_progress_to_job_store(job_store, tmp_path, m
     job = job_store.create_job("Test")
     job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"))
 
-    def fake_run_alignment(frames_dir, output_dir, *, progress_path, on_progress):
+    def fake_run_alignment(frames_dir, output_dir, *, progress_path, on_progress, timeout_seconds):
         on_progress(40.0)
         on_progress(95.0)
         return AlignmentResult(
@@ -97,3 +97,33 @@ def test_compute_alignment_forwards_progress_to_job_store(job_store, tmp_path, m
 
     stage = job_store.get_stage(job.id, "alignment")
     assert stage.progress_percent == 95.0
+
+
+def test_compute_alignment_scales_timeout_with_frame_count(job_store, tmp_path, monkeypatch):
+    job = job_store.create_job("Test")
+    job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"), frame_count=1000)
+
+    fake_result = AlignmentResult(
+        sparse_dir=tmp_path / "sparse" / "0", images_dir=tmp_path / "images", log="ok"
+    )
+    mock_run = MagicMock(return_value=fake_result)
+    monkeypatch.setattr(alignment_service, "run_alignment", mock_run)
+
+    alignment_service.compute_alignment(job_store, job.id)
+
+    assert mock_run.call_args.kwargs["timeout_seconds"] == 5000
+
+
+def test_compute_alignment_uses_base_timeout_when_frame_count_unknown(job_store, tmp_path, monkeypatch):
+    job = job_store.create_job("Test")
+    job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"))
+
+    fake_result = AlignmentResult(
+        sparse_dir=tmp_path / "sparse" / "0", images_dir=tmp_path / "images", log="ok"
+    )
+    mock_run = MagicMock(return_value=fake_result)
+    monkeypatch.setattr(alignment_service, "run_alignment", mock_run)
+
+    alignment_service.compute_alignment(job_store, job.id)
+
+    assert mock_run.call_args.kwargs["timeout_seconds"] == alignment_service.ALIGNMENT_BASE_TIMEOUT_SECONDS

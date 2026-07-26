@@ -12,6 +12,22 @@ class AlignmentError(Exception):
     pass
 
 
+# app/realityscan.py's run_alignment() defaults to a flat 600s timeout, which
+# doesn't scale with how many frames RealityScan has to align - fine for a
+# single clip's worth of frames, but a multi-clip job can have hundreds of
+# frames and legitimately take much longer. The only real timing data point
+# so far (MasinaPoarta: 78 frames, single clip) took ~65s, so 5s/frame leaves
+# generous headroom; recalibrate once more multi-clip runs are logged.
+ALIGNMENT_BASE_TIMEOUT_SECONDS = 600
+ALIGNMENT_SECONDS_PER_FRAME = 5
+
+
+def _alignment_timeout(frame_count: int | None) -> int:
+    if not frame_count:
+        return ALIGNMENT_BASE_TIMEOUT_SECONDS
+    return max(ALIGNMENT_BASE_TIMEOUT_SECONDS, frame_count * ALIGNMENT_SECONDS_PER_FRAME)
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -38,7 +54,11 @@ def compute_alignment(store: JobStore, job_id: str) -> AlignmentResult:
 
     try:
         result = run_alignment(
-            Path(job.frames_dir), output_dir, progress_path=progress_path, on_progress=report_progress
+            Path(job.frames_dir),
+            output_dir,
+            progress_path=progress_path,
+            on_progress=report_progress,
+            timeout_seconds=_alignment_timeout(job.frame_count),
         )
     except Exception as exc:
         store.upsert_stage(job_id, "alignment", "failed", finished_at=_now(), error=str(exc))
