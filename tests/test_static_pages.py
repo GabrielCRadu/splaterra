@@ -45,10 +45,12 @@ def test_new_job_page_contains_local_and_upload_forms(client):
     assert 'id="file-input"' in response.text
 
 
-def test_job_page_contains_stage_list_and_action_buttons(client):
+def test_job_page_contains_story_view_and_action_buttons(client):
     response = client.get("/job.html")
     assert response.status_code == 200
-    assert 'id="stage-list"' in response.text
+    assert 'id="story-bar"' in response.text
+    assert 'id="story-viewport"' in response.text
+    assert 'id="story-track"' in response.text
     assert 'id="btn-extract"' in response.text
     assert 'id="btn-recommend"' in response.text
 
@@ -103,7 +105,6 @@ def test_job_page_contains_extraction_settings_panel(client):
     assert 'id="extract-fps"' in response.text
     assert 'id="extract-num-frames"' in response.text
     assert 'id="extract-method"' in response.text
-    assert 'id="btn-extract-settings-toggle"' in response.text
 
 
 def test_job_page_contains_video_info_hint(client):
@@ -128,6 +129,22 @@ def test_job_page_restarts_polling_after_each_action():
     # handlers (add-clip-local/add-clip-upload/import-frames/extract/align/
     # recommend/train/export) each reassigning it after apiPost.
     assert content.count("stopPolling = startPolling()") == 9
+
+
+def test_job_page_contains_story_slides_for_every_stage(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    for stage in ("ingestion", "frame_extraction", "alignment", "training", "export"):
+        assert f'data-stage="{stage}"' in response.text
+        assert f'id="slide-status-{stage}"' in response.text
+
+
+def test_job_page_defines_story_navigation_functions(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert "function reachableIndex" in response.text
+    assert "function goToSlide" in response.text
+    assert "function checkAutoAdvance" in response.text
 
 
 def test_job_page_uses_custom_select_for_dropdowns(client):

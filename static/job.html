@@ -10,79 +10,99 @@
 <h1 id="job-name">...</h1>
 <p class="subtitle" id="job-meta"></p>
 
-<div class="card" id="stage-list"></div>
+<div class="story-bar" id="story-bar"></div>
 
-<div class="card" id="usage-panel" style="display:none;">
+<div class="story-viewport" id="story-viewport">
+  <div class="story-track" id="story-track">
+
+    <div class="story-slide" data-stage="ingestion">
+      <div class="story-slide-title">Ingestie</div>
+      <div class="story-slide-status" id="slide-status-ingestion"></div>
+      <div class="job-meta" style="margin-bottom:8px;">Clipuri video ingerate</div>
+      <div id="raw-videos-list"></div>
+      <div class="job-meta" style="margin:12px 0 8px;">Adauga clip</div>
+      <input type="text" id="add-clip-local-path" placeholder="Cale completa (ex. C:\Videos\clip2.mp4)" />
+      <button class="btn-ghost" id="btn-add-clip-local" type="button">Foloseste fisier local</button>
+      <input type="file" id="add-clip-file-input" accept="video/*" style="margin-top:10px;" />
+      <button class="btn-ghost" id="btn-add-clip-upload" type="button" style="margin-top:8px;">Incarca</button>
+      <p class="subtitle" id="add-clip-status" style="margin:8px 0 0;"></p>
+    </div>
+
+    <div class="story-slide" data-stage="frame_extraction">
+      <div class="story-slide-title">Extragere cadre</div>
+      <div class="story-slide-status" id="slide-status-frame_extraction"></div>
+      <p class="subtitle" id="video-info-hint" style="margin:0 0 12px;"></p>
+      <label class="settings-label" for="extract-fps">Cadre pe secunda esantionate (fps)</label>
+      <input type="text" inputmode="numeric" id="extract-fps" />
+      <label class="settings-label" for="extract-num-frames">Numar cadre finale (cele mai clare)</label>
+      <input type="text" inputmode="numeric" id="extract-num-frames" />
+      <label class="settings-label" for="extract-method">Metoda de selectie</label>
+      <select id="extract-method">
+        <option value="best-n">Cele mai clare (best-n)</option>
+        <option value="batched">Pe loturi (batched)</option>
+        <option value="outlier-removal">Elimina cadre neclare (outlier-removal)</option>
+      </select>
+      <p class="subtitle" id="extract-settings-hint" style="margin:8px 0 12px;"></p>
+      <p class="subtitle" id="recommend-status" style="margin:0 0 8px;"></p>
+      <a class="btn-ghost" id="link-recommendation" style="display:none;">Vezi recomandarea</a>
+      <button class="btn-ghost" id="btn-recommend" style="display:none;">Calculeaza recomandare</button>
+      <button class="btn" id="btn-extract" style="display:none; margin-top:10px;">Extrage cadre</button>
+      <div id="import-frames-panel" style="display:none; margin-top:12px;">
+        <div class="job-meta" style="margin-bottom:8px;">Ai deja cadre extrase?</div>
+        <input type="text" id="import-frames-path" placeholder="Cale folder (ex. C:\Poze\cadre)" />
+        <button class="btn-ghost" id="btn-import-frames" type="button">Foloseste cadrele astea (sari peste extragere)</button>
+      </div>
+      <a class="btn-ghost" id="link-frames" style="display:none; margin-top:10px;">Revizuieste cadrele</a>
+    </div>
+
+    <div class="story-slide" data-stage="alignment">
+      <div class="story-slide-title">Alignment</div>
+      <div class="story-slide-status" id="slide-status-alignment"></div>
+      <button class="btn" id="btn-align" style="display:none;">Porneste alignment</button>
+      <a class="btn-ghost" id="link-alignment" style="display:none;">Vezi alignment</a>
+    </div>
+
+    <div class="story-slide" data-stage="training">
+      <div class="story-slide-title">Antrenare</div>
+      <div class="story-slide-status" id="slide-status-training"></div>
+      <label class="checkbox-row" for="train-variable-exposure" style="margin-bottom:12px;">
+        <input type="checkbox" id="train-variable-exposure" />
+        Expunerea/balansul de alb variaza intre cadre (nu e fixat pe camera)
+      </label>
+      <button class="btn" id="btn-train" style="display:none;">Porneste antrenarea</button>
+      <a class="btn-ghost" id="link-training" style="display:none;" download>Descarca splat-ul</a>
+    </div>
+
+    <div class="story-slide" data-stage="export">
+      <div class="story-slide-title">Export</div>
+      <div class="story-slide-status" id="slide-status-export"></div>
+      <label class="settings-label" for="export-format">Exporta ca</label>
+      <select id="export-format">
+        <option value="spz">SPZ (Niantic, ~9x mai mic decat .ply)</option>
+        <option value="sog">SOG (SuperSplat, ~18x mai mic decat .ply)</option>
+        <option value="ply">PLY (original, fara compresie)</option>
+        <option value="html">HTML (viewer de sine statator)</option>
+      </select>
+      <button class="btn" id="btn-export" type="button" style="margin-top:8px;">Exporta</button>
+      <a class="btn-ghost" id="link-export" style="display:none; margin-top:8px;" download>Descarca exportul</a>
+    </div>
+
+  </div>
+</div>
+
+<div class="story-banner" id="story-banner" style="display:none;"></div>
+
+<div class="card" id="usage-panel" style="display:none; margin-top:12px;">
   <div class="usage-row"><span class="job-meta">CPU</span><span id="usage-cpu">—</span></div>
   <div class="usage-row"><span class="job-meta">RAM</span><span id="usage-ram">—</span></div>
   <div class="usage-row"><span class="job-meta">GPU</span><span id="usage-gpu">—</span></div>
   <div class="usage-row"><span class="job-meta">VRAM</span><span id="usage-vram">—</span></div>
 </div>
 
-<div class="card" id="add-clip-panel" style="display:none;">
-  <div class="job-meta" style="margin-bottom:8px;">Clipuri video ingerate</div>
-  <div id="raw-videos-list"></div>
-  <div class="job-meta" style="margin:12px 0 8px;">Adauga alt clip</div>
-  <input type="text" id="add-clip-local-path" placeholder="Cale completa (ex. C:\Videos\clip2.mp4)" />
-  <button class="btn-ghost" id="btn-add-clip-local" type="button">Foloseste fisier local</button>
-  <input type="file" id="add-clip-file-input" accept="video/*" style="margin-top:10px;" />
-  <button class="btn-ghost" id="btn-add-clip-upload" type="button" style="margin-top:8px;">Incarca</button>
-  <p class="subtitle" id="add-clip-status" style="margin:8px 0 0;"></p>
-</div>
-
-<div id="extract-settings-block" style="display:none;">
-  <button class="btn-ghost" id="btn-extract-settings-toggle" type="button">&#9881;&#65039; Setari extragere</button>
-  <div class="card" id="extract-settings-panel" style="display:none;">
-    <p class="subtitle" id="video-info-hint" style="margin:0 0 12px;"></p>
-    <label class="settings-label" for="extract-fps">Cadre pe secunda esantionate (fps)</label>
-    <input type="text" inputmode="numeric" id="extract-fps" />
-    <label class="settings-label" for="extract-num-frames">Numar cadre finale (cele mai clare)</label>
-    <input type="text" inputmode="numeric" id="extract-num-frames" />
-    <label class="settings-label" for="extract-method">Metoda de selectie</label>
-    <select id="extract-method">
-      <option value="best-n">Cele mai clare (best-n)</option>
-      <option value="batched">Pe loturi (batched)</option>
-      <option value="outlier-removal">Elimina cadre neclare (outlier-removal)</option>
-    </select>
-    <p class="subtitle" id="extract-settings-hint" style="margin:8px 0 0;"></p>
-  </div>
-</div>
-<button class="btn" id="btn-extract" style="display:none;">Extrage cadre</button>
-
-<div class="card" id="import-frames-panel" style="display:none;">
-  <div class="job-meta" style="margin-bottom:8px;">Ai deja cadre extrase?</div>
-  <input type="text" id="import-frames-path" placeholder="Cale folder (ex. C:\Poze\cadre)" />
-  <button class="btn-ghost" id="btn-import-frames" type="button">Foloseste cadrele astea (sari peste extragere)</button>
-</div>
-<a class="btn-ghost" id="link-frames" style="display:none;">Revizuieste cadrele</a>
-<button class="btn" id="btn-align" style="display:none;">Porneste alignment</button>
-<a class="btn-ghost" id="link-alignment" style="display:none;">Vezi alignment</a>
-<button class="btn" id="btn-recommend" style="display:none;">Calculeaza recomandare</button>
-<a class="btn-ghost" id="link-recommendation" style="display:none;">Vezi recomandarea</a>
-<div class="card" id="train-settings-panel" style="display:none;">
-  <label class="checkbox-row" for="train-variable-exposure">
-    <input type="checkbox" id="train-variable-exposure" />
-    Expunerea/balansul de alb variaza intre cadre (nu e fixat pe camera)
-  </label>
-</div>
-<button class="btn" id="btn-train" style="display:none;">Porneste antrenarea</button>
-<a class="btn-ghost" id="link-training" style="display:none;" download>Descarca splat-ul</a>
-
-<div class="card" id="export-panel" style="display:none;">
-  <label class="settings-label" for="export-format">Exporta ca</label>
-  <select id="export-format">
-    <option value="spz">SPZ (Niantic, ~9x mai mic decat .ply)</option>
-    <option value="sog">SOG (SuperSplat, ~18x mai mic decat .ply)</option>
-    <option value="ply">PLY (original, fara compresie)</option>
-    <option value="html">HTML (viewer de sine statator)</option>
-  </select>
-  <button class="btn" id="btn-export" type="button" style="margin-top:8px;">Exporta</button>
-  <a class="btn-ghost" id="link-export" style="display:none; margin-top:8px;" download>Descarca exportul</a>
-</div>
-
 <script src="/js/app.js"></script>
 <script>
   const jobId = jobIdFromQuery();
+  const STORIES = ["ingestion", "frame_extraction", "alignment", "training", "export"];
   const STAGE_LABELS = {
     ingestion: "Ingestie",
     frame_extraction: "Extragere cadre",
@@ -92,6 +112,31 @@
     export: "Export",
   };
 
+  let lastStages = [];
+  let viewedIndex = 0;
+  let reachableIndexCache = 0;
+  let initializedView = false;
+  let userNavigated = false;
+  const lastStatusByStage = {};
+  const expandedLogs = new Set();
+
+  function stageStatus(stages, name) {
+    const stage = stages.find((s) => s.stage === name);
+    return stage ? stage.status : null;
+  }
+
+  function reachableIndex(stages) {
+    let idx = 0;
+    for (const stage of STORIES) {
+      if (stageStatus(stages, stage) === "done") {
+        idx += 1;
+      } else {
+        break;
+      }
+    }
+    return Math.min(idx, STORIES.length - 1);
+  }
+
   function progressBarHtml(stage) {
     if (stage.status !== "running") return "";
     if (stage.progress_percent !== null && stage.progress_percent !== undefined) {
@@ -100,9 +145,6 @@
     }
     return `<div class="progress-track"><div class="progress-indeterminate"></div></div>`;
   }
-
-  const expandedLogs = new Set();
-  let lastStages = [];
 
   function logPanelHtml(stage) {
     if (!stage.log) return "";
@@ -115,31 +157,104 @@
     `;
   }
 
-  function renderStages(stages) {
-    lastStages = stages;
-    const list = document.getElementById("stage-list");
-    if (stages.length === 0) {
-      list.innerHTML = '<p class="empty">Niciun pas pornit inca.</p>';
+  function renderAllSlideStatuses(stages) {
+    STORIES.forEach((stageName) => {
+      const container = document.getElementById(`slide-status-${stageName}`);
+      const s = stages.find((x) => x.stage === stageName);
+      if (!s) {
+        container.innerHTML = "";
+        return;
+      }
+      const pillClass =
+        s.status === "done" ? "pill-green" : s.status === "failed" ? "pill-orange" : "pill-gray";
+      const errorLine = s.error ? `<div class="job-meta">${escapeHtml(s.error)}</div>` : "";
+      container.innerHTML = `
+        <span class="pill ${pillClass}">${s.status}</span>
+        ${errorLine}
+        ${progressBarHtml(s)}
+        ${logPanelHtml(s)}
+      `;
+    });
+
+    const recommendStage = stages.find((s) => s.stage === "recommendation");
+    document.getElementById("recommend-status").textContent =
+      recommendStage && recommendStage.status === "failed" ? recommendStage.error || "" : "";
+  }
+
+  function renderStoryBar(stages) {
+    const bar = document.getElementById("story-bar");
+    bar.innerHTML = STORIES.map((stage, i) => {
+      const status = stageStatus(stages, stage);
+      const activeClass = i === viewedIndex ? " active" : "";
+      if (status === "done") {
+        return `<div class="story-bar-segment${activeClass}"><div class="story-bar-fill" style="width:100%"></div></div>`;
+      }
+      if (i === viewedIndex && status === "running") {
+        const s = stages.find((x) => x.stage === stage);
+        if (s && s.progress_percent !== null && s.progress_percent !== undefined) {
+          const pct = Math.max(0, Math.min(100, s.progress_percent));
+          return `<div class="story-bar-segment${activeClass}"><div class="story-bar-fill" style="width:${pct}%"></div></div>`;
+        }
+        return `<div class="story-bar-segment${activeClass}"><div class="story-bar-fill indeterminate"></div></div>`;
+      }
+      return `<div class="story-bar-segment${activeClass}"><div class="story-bar-fill" style="width:0%"></div></div>`;
+    }).join("");
+  }
+
+  function renderBackgroundBanner(stages) {
+    const banner = document.getElementById("story-banner");
+    const runningIndex = STORIES.findIndex(
+      (stage, i) => i !== viewedIndex && stageStatus(stages, stage) === "running"
+    );
+    if (runningIndex === -1) {
+      banner.style.display = "none";
       return;
     }
-    list.innerHTML = stages
-      .map((s) => {
-        const pillClass =
-          s.status === "done" ? "pill-green" : s.status === "failed" ? "pill-orange" : "pill-gray";
-        const errorLine = s.error ? `<div class="job-meta">${escapeHtml(s.error)}</div>` : "";
-        return `
-          <div class="job-row">
-            <div class="job-info">
-              <div class="job-name">${STAGE_LABELS[s.stage] || s.stage}</div>
-              ${errorLine}
-              ${progressBarHtml(s)}
-              ${logPanelHtml(s)}
-            </div>
-            <span class="pill ${pillClass}">${s.status}</span>
-          </div>
-        `;
-      })
-      .join("");
+    banner.style.display = "flex";
+    banner.textContent = `${STAGE_LABELS[STORIES[runningIndex]]} ruleaza in fundal — atinge ca sa vezi`;
+    banner.onclick = () => goToSlide(runningIndex, { isUserAction: true });
+  }
+
+  function applyTrackTransform() {
+    document.getElementById("story-track").style.transform = `translateX(-${viewedIndex * 100}%)`;
+  }
+
+  function goToSlide(index, opts) {
+    opts = opts || {};
+    viewedIndex = Math.max(0, Math.min(index, reachableIndexCache));
+    if (opts.isUserAction) {
+      userNavigated = viewedIndex !== reachableIndexCache;
+    } else if (viewedIndex === reachableIndexCache) {
+      userNavigated = false;
+    }
+    applyTrackTransform();
+    renderStoryBar(lastStages);
+    renderBackgroundBanner(lastStages);
+  }
+
+  function checkAutoAdvance(stages) {
+    const currentStage = STORIES[viewedIndex];
+    const newStatus = stageStatus(stages, currentStage);
+    const prevStatus = lastStatusByStage[currentStage];
+
+    if (
+      prevStatus !== undefined &&
+      prevStatus !== "done" &&
+      newStatus === "done" &&
+      !userNavigated &&
+      viewedIndex < STORIES.length - 1
+    ) {
+      const targetIndex = viewedIndex + 1;
+      setTimeout(() => {
+        if (!userNavigated) {
+          goToSlide(targetIndex, {});
+        }
+      }, 1200);
+    }
+
+    STORIES.forEach((stage) => {
+      lastStatusByStage[stage] = stageStatus(stages, stage);
+    });
   }
 
   function renderUsage(usage) {
@@ -163,11 +278,6 @@
         : videos.map((name) => `<div class="job-meta">${escapeHtml(name)}</div>`).join("");
   }
 
-  function stageStatus(stages, name) {
-    const stage = stages.find((s) => s.stage === name);
-    return stage ? stage.status : null;
-  }
-
   function updateActions(stages) {
     const ingestionDone = stageStatus(stages, "ingestion") === "done";
     const extractionDone = stageStatus(stages, "frame_extraction") === "done";
@@ -176,10 +286,6 @@
     const trainingDone = stageStatus(stages, "training") === "done";
 
     document.getElementById("btn-extract").style.display =
-      ingestionDone && !extractionDone ? "block" : "none";
-    document.getElementById("extract-settings-block").style.display =
-      ingestionDone && !extractionDone ? "block" : "none";
-    document.getElementById("add-clip-panel").style.display =
       ingestionDone && !extractionDone ? "block" : "none";
     document.getElementById("import-frames-panel").style.display = !extractionDone ? "block" : "none";
 
@@ -203,16 +309,12 @@
 
     document.getElementById("btn-train").style.display =
       alignmentDone && !trainingDone ? "block" : "none";
-    document.getElementById("train-settings-panel").style.display =
-      alignmentDone && !trainingDone ? "block" : "none";
 
     const trainingLink = document.getElementById("link-training");
     trainingLink.style.display = trainingDone ? "block" : "none";
     trainingLink.href = `/jobs/${jobId}/training/download`;
 
     const exportDone = stageStatus(stages, "export") === "done";
-    document.getElementById("export-panel").style.display = trainingDone ? "block" : "none";
-
     const exportLink = document.getElementById("link-export");
     exportLink.style.display = exportDone ? "block" : "none";
     exportLink.href = `/jobs/${jobId}/export/download`;
@@ -224,21 +326,35 @@
       : "none";
   }
 
+  function applyStages(stages) {
+    lastStages = stages;
+    reachableIndexCache = reachableIndex(stages);
+    if (!initializedView) {
+      viewedIndex = reachableIndexCache;
+      initializedView = true;
+    }
+    checkAutoAdvance(stages);
+    renderAllSlideStatuses(stages);
+    updateActions(stages);
+    renderStoryBar(stages);
+    renderBackgroundBanner(stages);
+    applyTrackTransform();
+  }
+
   async function refresh() {
     const job = await apiGet(`/jobs/${jobId}`);
     document.getElementById("job-name").textContent = job.name;
     document.getElementById("job-meta").textContent = new Date(job.created_at).toLocaleString("ro-RO");
 
     const stages = await apiGet(`/jobs/${jobId}/stages`);
-    renderStages(stages);
-    updateActions(stages);
+    applyStages(stages);
+    await loadExtractSettingsDefaults();
     await loadRawVideos();
   }
 
   function startPolling() {
     return pollStages(jobId, (stages) => {
-      renderStages(stages);
-      updateActions(stages);
+      applyStages(stages);
       const anyRunning = stages.some((s) => s.status === "running");
       if (stages.length > 0 && !anyRunning) {
         stopPolling();
@@ -246,13 +362,9 @@
     });
   }
 
-  let extractSettingsLoaded = false;
   const EXTRACT_DEFAULTS = { fps: 10, num_frames: 300, selection_method: "batched" };
 
   async function loadExtractSettingsDefaults() {
-    if (extractSettingsLoaded) return;
-    extractSettingsLoaded = true;
-
     let extraction = EXTRACT_DEFAULTS;
     let hint = "Valori implicite (recomandarea nu a fost calculata inca).";
     try {
@@ -280,15 +392,6 @@
       videoInfoHint.textContent = "";
     }
   }
-
-  document.getElementById("btn-extract-settings-toggle").addEventListener("click", async () => {
-    const panel = document.getElementById("extract-settings-panel");
-    const isHidden = panel.style.display === "none" || !panel.style.display;
-    if (isHidden) {
-      await loadExtractSettingsDefaults();
-    }
-    panel.style.display = isHidden ? "block" : "none";
-  });
 
   document.getElementById("btn-add-clip-local").addEventListener("click", async () => {
     const sourcePath = document.getElementById("add-clip-local-path").value.trim();
@@ -379,7 +482,7 @@
     stopPolling = startPolling();
   });
 
-  document.getElementById("stage-list").addEventListener("click", (event) => {
+  document.getElementById("story-track").addEventListener("click", (event) => {
     const toggle = event.target.closest(".log-toggle");
     if (!toggle) return;
     const stageName = toggle.dataset.stage;
@@ -388,7 +491,18 @@
     } else {
       expandedLogs.add(stageName);
     }
-    renderStages(lastStages);
+    renderAllSlideStatuses(lastStages);
+  });
+
+  document.getElementById("story-viewport").addEventListener("click", (event) => {
+    if (event.target.closest("button, a, input, select, .custom-select")) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const tappedPrev = event.clientX - rect.left < rect.width / 3;
+    if (tappedPrev) {
+      goToSlide(viewedIndex - 1, { isUserAction: true });
+    } else {
+      goToSlide(viewedIndex + 1, { isUserAction: true });
+    }
   });
 
   const extractMethodSelect = initCustomSelect(document.getElementById("extract-method"));
