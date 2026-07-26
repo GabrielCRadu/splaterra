@@ -125,10 +125,10 @@ def test_job_page_restarts_polling_after_each_action():
     content = (Path(__file__).resolve().parent.parent / "static" / "job.html").read_text(
         encoding="utf-8"
     )
-    # 1 initial assignment (`let stopPolling = startPolling()`) + 8 button
-    # handlers (add-clip-local/add-clip-upload/import-frames/extract/align/
-    # recommend/train/export) each reassigning it after apiPost.
-    assert content.count("stopPolling = startPolling()") == 9
+    # 1 initial assignment (`let stopPolling = startPolling()`) + 7 button
+    # handlers (add-clip-upload/import-frames/extract/align/recommend/train/
+    # export) each reassigning it after apiPost.
+    assert content.count("stopPolling = startPolling()") == 8
 
 
 def test_job_page_contains_story_slides_for_every_stage(client):
@@ -219,10 +219,11 @@ def test_job_page_contains_add_clip_section(client):
     response = client.get("/job.html")
     assert response.status_code == 200
     assert 'id="raw-videos-list"' in response.text
-    assert 'id="add-clip-local-path"' in response.text
-    assert 'id="btn-add-clip-local"' in response.text
     assert 'id="add-clip-file-input"' in response.text
+    assert "multiple" in response.text
     assert 'id="btn-add-clip-upload"' in response.text
+    assert 'id="add-clip-upload-list"' in response.text
+    assert "add-clip-local-path" not in response.text
 
 
 def test_job_page_contains_export_controls(client):

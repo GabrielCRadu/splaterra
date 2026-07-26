@@ -21,11 +21,10 @@
       <div class="job-meta" style="margin-bottom:8px;">Clipuri video ingerate</div>
       <div id="raw-videos-list"></div>
       <div class="job-meta" style="margin:12px 0 8px;">Adauga clip</div>
-      <input type="text" id="add-clip-local-path" placeholder="Cale completa (ex. C:\Videos\clip2.mp4)" />
-      <button class="btn-ghost" id="btn-add-clip-local" type="button">Foloseste fisier local</button>
-      <input type="file" id="add-clip-file-input" accept="video/*" style="margin-top:10px;" />
+      <input type="file" id="add-clip-file-input" accept="video/*" multiple />
       <button class="btn-ghost" id="btn-add-clip-upload" type="button" style="margin-top:8px;">Incarca</button>
       <p class="subtitle" id="add-clip-status" style="margin:8px 0 0;"></p>
+      <div id="add-clip-upload-list"></div>
     </div>
 
     <div class="story-slide" data-stage="frame_extraction">
@@ -398,30 +397,40 @@
     }
   }
 
-  document.getElementById("btn-add-clip-local").addEventListener("click", async () => {
-    const sourcePath = document.getElementById("add-clip-local-path").value.trim();
-    if (!sourcePath) {
-      alert("Introdu o cale de fisier.");
-      return;
-    }
-    await apiPost(`/jobs/${jobId}/ingest/local`, { source_path: sourcePath });
-    document.getElementById("add-clip-local-path").value = "";
-    refresh();
-    stopPolling();
-    stopPolling = startPolling();
-  });
-
   document.getElementById("btn-add-clip-upload").addEventListener("click", async () => {
-    const file = document.getElementById("add-clip-file-input").files[0];
-    if (!file) {
-      alert("Alege un fisier video.");
+    const files = Array.from(document.getElementById("add-clip-file-input").files);
+    const statusEl = document.getElementById("add-clip-status");
+    if (files.length === 0) {
+      statusEl.textContent = "Alege cel putin un fisier video.";
       return;
     }
-    document.getElementById("add-clip-status").textContent = "Se incarca...";
-    await uploadFileToJob(jobId, file, (done, total) => {
-      document.getElementById("add-clip-status").textContent = `Se incarca... ${done}/${total}`;
+    statusEl.textContent = "";
+
+    const listEl = document.getElementById("add-clip-upload-list");
+    listEl.innerHTML = "";
+    const rows = files.map((file) => {
+      const row = document.createElement("div");
+      row.className = "upload-row";
+      row.innerHTML = `
+        <div class="upload-row-name">${escapeHtml(file.name)}</div>
+        <div class="progress-track"><div class="progress-fill" style="width:0%"></div></div>
+      `;
+      listEl.appendChild(row);
+      return row;
     });
-    document.getElementById("add-clip-status").textContent = "";
+
+    for (let index = 0; index < files.length; index += 1) {
+      const fill = rows[index].querySelector(".progress-fill");
+      try {
+        await uploadFileToJob(jobId, files[index], (done, total) => {
+          fill.style.width = `${Math.round((done / total) * 100)}%`;
+        });
+        rows[index].classList.add("upload-row-done");
+      } catch (err) {
+        rows[index].classList.add("upload-row-failed");
+      }
+    }
+
     document.getElementById("add-clip-file-input").value = "";
     refresh();
     stopPolling();
