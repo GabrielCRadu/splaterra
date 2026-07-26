@@ -7,6 +7,8 @@ from pathlib import Path
 from app.job_store import JobStore
 from app.paths import raw_dir
 
+_VIDEO_EXTENSIONS = frozenset({".mp4", ".mov", ".avi", ".mkv", ".m4v", ".webm", ".mts", ".m2ts"})
+
 
 class IngestionError(Exception):
     pass
@@ -14,6 +16,13 @@ class IngestionError(Exception):
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def list_raw_videos(job_id: str) -> list[Path]:
+    directory = raw_dir(job_id)
+    if not directory.is_dir():
+        return []
+    return sorted(p for p in directory.glob("*") if p.is_file() and p.suffix.lower() in _VIDEO_EXTENSIONS)
 
 
 def import_local_file(store: JobStore, job_id: str, source_path: Path) -> Path:
