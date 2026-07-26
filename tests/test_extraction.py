@@ -116,3 +116,53 @@ def test_extract_frames_forwards_progress_to_job_store(job_store, tmp_path, monk
 
     stage = job_store.get_stage(job.id, "frame_extraction")
     assert stage.progress_percent == 75.0
+
+
+def test_import_local_frames_copies_images_and_updates_job(job_store, tmp_path):
+    job = job_store.create_job("Test")
+    source = tmp_path / "existing_frames"
+    source.mkdir()
+    (source / "0001.jpg").write_bytes(b"fake")
+    (source / "0002.png").write_bytes(b"fake")
+    (source / "notes.txt").write_text("ignored")
+
+    count = extraction.import_local_frames(job_store, job.id, source)
+
+    assert count == 2
+    fetched = job_store.get_job(job.id)
+    assert fetched.frame_count == 2
+    assert fetched.frames_dir is not None
+    copied = sorted(p.name for p in Path(fetched.frames_dir).glob("*"))
+    assert copied == ["0001.jpg", "0002.png"]
+
+    stage = job_store.get_stage(job.id, "frame_extraction")
+    assert stage.status == "done"
+
+
+def test_import_local_frames_unknown_job_raises_without_stage_write(job_store, tmp_path):
+    with pytest.raises(extraction.ExtractionError, match="Unknown job"):
+        extraction.import_local_frames(job_store, "does-not-exist", tmp_path)
+
+    assert job_store.get_stage("does-not-exist", "frame_extraction") is None
+
+
+def test_import_local_frames_missing_directory_records_failed_stage(job_store, tmp_path):
+    job = job_store.create_job("Test")
+
+    with pytest.raises(extraction.ExtractionError, match="not found"):
+        extraction.import_local_frames(job_store, job.id, tmp_path / "missing")
+
+    stage = job_store.get_stage(job.id, "frame_extraction")
+    assert stage.status == "failed"
+
+
+def test_import_local_frames_empty_directory_records_failed_stage(job_store, tmp_path):
+    job = job_store.create_job("Test")
+    source = tmp_path / "empty"
+    source.mkdir()
+
+    with pytest.raises(extraction.ExtractionError, match="No image files found"):
+        extraction.import_local_frames(job_store, job.id, source)
+
+    stage = job_store.get_stage(job.id, "frame_extraction")
+    assert stage.status == "failed"

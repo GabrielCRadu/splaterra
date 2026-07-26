@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -7,6 +8,10 @@ from app.ingestion import list_raw_videos
 from app.job_store import JobStore
 from app.paths import frames_dir, raw_dir
 from app.sharp_frames import ExtractionResult, run_extraction
+
+# Matches app/api/frames.py's _IMAGE_SUFFIXES - kept as a separate constant since
+# extraction.py is a service module and shouldn't import from the API layer.
+_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
 
 
 class ExtractionError(Exception):
@@ -68,3 +73,48 @@ def extract_frames(
     store.update_job(job_id, frames_dir=str(output_dir), frame_count=len(result.frames))
     store.upsert_stage(job_id, "frame_extraction", "done", finished_at=_now(), log=result.log)
     return len(result.frames)
+
+
+def import_local_frames(store: JobStore, job_id: str, source_dir: Path) -> int:
+    # Alternative to extract_frames(): skips sharp-frames entirely for callers
+    # who already have a folder of hand-picked/pre-extracted sharp frames.
+    # Deliberately independent of raw_video_path/ingestion - a frames-only
+    # workflow with no ingested video is a valid use case.
+    job = store.get_job(job_id)
+    if job is None:
+        # No stage write here: job_stages.job_id has a foreign-key reference to
+        # jobs.id (PRAGMA foreign_keys = ON in app/db.py), so there is no row to
+        # attach a stage to for a job_id that doesn't exist.
+        raise ExtractionError(f"Unknown job: {job_id}")
+    if not source_dir.is_dir():
+        message = f"Source directory not found: {source_dir}"
+        now = _now()
+        store.upsert_stage(job_id, "frame_extraction", "failed", started_at=now, finished_at=now, error=message)
+        raise ExtractionError(message)
+
+    images = sorted(
+        p for p in source_dir.glob("*") if p.is_file() and p.suffix.lower() in _IMAGE_SUFFIXES
+    )
+    if not images:
+        message = f"No image files found in {source_dir}"
+        now = _now()
+        store.upsert_stage(job_id, "frame_extraction", "failed", started_at=now, finished_at=now, error=message)
+        raise ExtractionError(message)
+
+    output_dir = frames_dir(job_id)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    store.upsert_stage(job_id, "frame_extraction", "running", started_at=_now())
+
+    try:
+        for image in images:
+            shutil.copy2(image, output_dir / image.name)
+    except OSError as exc:
+        store.upsert_stage(job_id, "frame_extraction", "failed", finished_at=_now(), error=str(exc))
+        raise ExtractionError(f"Failed to copy frames: {exc}") from exc
+
+    store.update_job(job_id, frames_dir=str(output_dir), frame_count=len(images))
+    store.upsert_stage(
+        job_id, "frame_extraction", "done", finished_at=_now(),
+        log=f"Imported {len(images)} pre-extracted frames from {source_dir}",
+    )
+    return len(images)
