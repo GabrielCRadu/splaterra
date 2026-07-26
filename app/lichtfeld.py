@@ -22,6 +22,13 @@ _ITERATION_RE = re.compile(r"[Ii]teration[:\s]+(\d+)\s*/\s*(\d+)")
 _PERCENT_RE = re.compile(r"(\d{1,3})\s*%\s*\|")
 _FRACTION_RE = re.compile(r"(?<!\d)(\d+)\s*/\s*(\d+)(?!\d)")
 
+# Formats accepted by LichtFeld Studio's "convert" subcommand (verified via
+# `LichtFeld-Studio.exe convert --help` - this subcommand is not listed in the
+# top-level --help output). .sog is PlayCanvas SuperSplat's own compressed
+# format (~18x smaller than .ply on a real 4.8M-Gaussian export), .spz is
+# Niantic's compressed format (~9x smaller), .html is a standalone viewer.
+CONVERT_FORMATS = frozenset({"ply", "sog", "spz", "html"})
+
 
 class LichtFeldError(Exception):
     pass
@@ -159,3 +166,45 @@ def run_training(
     splat_path = max(candidates, key=lambda p: p.stat().st_mtime)
 
     return TrainingResult(splat_path=splat_path, log=log)
+
+
+def convert_splat(
+    input_path: Path,
+    output_path: Path,
+    *,
+    format: str,
+    sh_degree: int = -1,
+    timeout_seconds: int = 1800,
+) -> Path:
+    if format not in CONVERT_FORMATS:
+        raise LichtFeldError(
+            f"Unsupported export format: {format!r}. Expected one of {sorted(CONVERT_FORMATS)}"
+        )
+    binary = _lichtfeld_binary()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Unlike training, `convert` prints only start/end messages, no live
+    # progress - a plain blocking subprocess.run (like _run_nvidia_smi in
+    # app/hardware.py) is enough, no Popen/reader-thread machinery needed.
+    command = [
+        binary, "convert", str(input_path), str(output_path),
+        "-f", format,
+        "--sh-degree", str(sh_degree),
+        "-y",
+    ]
+    try:
+        process = subprocess.run(
+            command, capture_output=True, text=True, check=False, timeout=timeout_seconds
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise LichtFeldError(
+            f"LichtFeld Studio conversion did not finish within {timeout_seconds}s and was terminated"
+        ) from exc
+
+    log = process.stdout + process.stderr
+    if process.returncode != 0:
+        raise LichtFeldError(f"LichtFeld Studio conversion exited with {process.returncode}:\n{log}")
+    if not output_path.is_file():
+        raise LichtFeldError(f"LichtFeld Studio conversion did not produce the expected output file:\n{log}")
+
+    return output_path

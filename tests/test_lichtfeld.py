@@ -237,3 +237,107 @@ def test_run_training_raises_on_timeout(tmp_path, monkeypatch):
 
     with pytest.raises(lichtfeld.LichtFeldError, match="did not finish within"):
         lichtfeld.run_training(tmp_path / "data", tmp_path / "out", timeout_seconds=5)
+
+
+def test_convert_splat_raises_on_unsupported_format(tmp_path, monkeypatch):
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+    with pytest.raises(lichtfeld.LichtFeldError, match="Unsupported export format"):
+        lichtfeld.convert_splat(tmp_path / "in.ply", tmp_path / "out.xyz", format="xyz")
+
+
+def test_convert_splat_builds_correct_command(tmp_path, monkeypatch):
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+    input_path = tmp_path / "in.ply"
+    output_path = tmp_path / "out.spz"
+    captured = {}
+
+    def fake_run(command, capture_output, text, check, timeout):
+        captured["command"] = command
+        output_path.write_bytes(b"fake spz")
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = "Done: 1 succeeded, 0 skipped, 0 failed\n"
+        result.stderr = ""
+        return result
+
+    monkeypatch.setattr(lichtfeld.subprocess, "run", fake_run)
+
+    result = lichtfeld.convert_splat(input_path, output_path, format="spz")
+
+    assert result == output_path
+    command = captured["command"]
+    assert command[1] == "convert"
+    assert str(input_path) in command
+    assert str(output_path) in command
+    assert "-f" in command
+    assert command[command.index("-f") + 1] == "spz"
+    assert "-y" in command
+
+
+def test_convert_splat_passes_sh_degree(tmp_path, monkeypatch):
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+    output_path = tmp_path / "out.spz"
+    captured = {}
+
+    def fake_run(command, capture_output, text, check, timeout):
+        captured["command"] = command
+        output_path.write_bytes(b"fake")
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = ""
+        result.stderr = ""
+        return result
+
+    monkeypatch.setattr(lichtfeld.subprocess, "run", fake_run)
+
+    lichtfeld.convert_splat(tmp_path / "in.ply", output_path, format="spz", sh_degree=0)
+
+    command = captured["command"]
+    index = command.index("--sh-degree")
+    assert command[index + 1] == "0"
+
+
+def test_convert_splat_raises_on_nonzero_exit(tmp_path, monkeypatch):
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+
+    def fake_run(command, capture_output, text, check, timeout):
+        result = MagicMock()
+        result.returncode = 1
+        result.stdout = ""
+        result.stderr = "Error: unsupported input format\n"
+        return result
+
+    monkeypatch.setattr(lichtfeld.subprocess, "run", fake_run)
+
+    with pytest.raises(lichtfeld.LichtFeldError, match="unsupported input format"):
+        lichtfeld.convert_splat(tmp_path / "in.ply", tmp_path / "out.spz", format="spz")
+
+
+def test_convert_splat_raises_when_output_missing_despite_zero_exit(tmp_path, monkeypatch):
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+
+    def fake_run(command, capture_output, text, check, timeout):
+        result = MagicMock()
+        result.returncode = 0
+        result.stdout = ""
+        result.stderr = ""
+        return result
+
+    monkeypatch.setattr(lichtfeld.subprocess, "run", fake_run)
+
+    with pytest.raises(lichtfeld.LichtFeldError, match="did not produce"):
+        lichtfeld.convert_splat(tmp_path / "in.ply", tmp_path / "out.spz", format="spz")
+
+
+def test_convert_splat_raises_on_timeout(tmp_path, monkeypatch):
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+
+    def fake_run(command, capture_output, text, check, timeout):
+        raise lichtfeld.subprocess.TimeoutExpired(cmd=command, timeout=timeout)
+
+    monkeypatch.setattr(lichtfeld.subprocess, "run", fake_run)
+
+    with pytest.raises(lichtfeld.LichtFeldError, match="did not finish within"):
+        lichtfeld.convert_splat(
+            tmp_path / "in.ply", tmp_path / "out.spz", format="spz", timeout_seconds=5
+        )
