@@ -37,3 +37,56 @@ def test_get_hardware_reports_no_gpu(client, monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["gpu"] is None
+
+
+def test_get_hardware_usage_returns_sampled_values(client, monkeypatch):
+    from app.hardware import UsageSnapshot
+
+    monkeypatch.setattr(
+        hardware_api,
+        "sample_usage",
+        MagicMock(
+            return_value=UsageSnapshot(
+                cpu_percent=42.5,
+                ram_used_gb=8.0,
+                ram_total_gb=16.0,
+                gpu_percent=95.0,
+                vram_used_mb=9637,
+                vram_total_mb=12288,
+            )
+        ),
+    )
+
+    response = client.get("/hardware/usage")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["cpu_percent"] == 42.5
+    assert body["gpu_percent"] == 95.0
+    assert body["vram_used_mb"] == 9637
+
+
+def test_get_hardware_usage_reports_no_gpu(client, monkeypatch):
+    from app.hardware import UsageSnapshot
+
+    monkeypatch.setattr(
+        hardware_api,
+        "sample_usage",
+        MagicMock(
+            return_value=UsageSnapshot(
+                cpu_percent=10.0,
+                ram_used_gb=4.0,
+                ram_total_gb=16.0,
+                gpu_percent=None,
+                vram_used_mb=None,
+                vram_total_mb=None,
+            )
+        ),
+    )
+
+    response = client.get("/hardware/usage")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["gpu_percent"] is None
+    assert body["vram_used_mb"] is None
