@@ -98,6 +98,7 @@ def run_training(
     bilateral_grid: bool = False,
     timeout_seconds: int = 7200,
     on_progress: Callable[[float], None] | None = None,
+    on_process_start: Callable[[subprocess.Popen], None] | None = None,
 ) -> TrainingResult:
     binary = _lichtfeld_binary()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -126,6 +127,8 @@ def run_training(
     process = subprocess.Popen(
         command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
     )
+    if on_process_start is not None:
+        on_process_start(process)
     output_queue: queue.Queue = queue.Queue()
     reader = threading.Thread(target=_reader_thread, args=(process.stdout, output_queue), daemon=True)
     reader.start()

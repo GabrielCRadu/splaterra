@@ -4,6 +4,7 @@ import json
 import logging
 from datetime import datetime, timezone
 
+from app import process_registry
 from app.hardware import UsageSnapshot, detect_hardware, sample_usage
 from app.job_store import JobStore
 from app.lichtfeld import TrainingResult, run_training
@@ -123,19 +124,27 @@ def compute_training(
             max_gaussians=max_gaussians,
             bilateral_grid=variable_exposure,
             on_progress=report_progress,
+            on_process_start=lambda p: process_registry.register(job_id, "training", p),
         )
     except Exception as exc:
-        store.upsert_stage(job_id, "training", "failed", finished_at=_now(), error=str(exc))
+        message = (
+            "Antrenare anulata de utilizator"
+            if process_registry.was_cancelled(job_id, "training")
+            else str(exc)
+        )
+        store.upsert_stage(job_id, "training", "failed", finished_at=_now(), error=message)
         _log_training_metrics(
             job_id,
             status="failed",
-            error=str(exc),
+            error=message,
             log="",
             variable_exposure=variable_exposure,
             max_gaussians=max_gaussians,
             usage_samples=usage_samples,
         )
-        raise TrainingError(str(exc)) from exc
+        raise TrainingError(message) from exc
+    finally:
+        process_registry.unregister(job_id, "training")
 
     store.update_job(job_id, splat_path=str(result.splat_path))
     store.upsert_stage(job_id, "training", "done", finished_at=_now(), log=result.log)

@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="/css/app.css" />
 </head>
 <body>
+<a class="home-link" href="/" aria-label="Toate scanarile">&larr; Toate scanarile</a>
 <h1 id="job-name">...</h1>
 <p class="subtitle" id="job-meta"></p>
 
@@ -66,6 +67,7 @@
       <div class="story-slide-title">Alignment</div>
       <div class="story-slide-status" id="slide-status-alignment"></div>
       <button class="btn" id="btn-align" style="display:none;">Porneste alignment</button>
+      <button class="btn-danger" id="btn-cancel-align" style="display:none;" type="button">Opreste alignment</button>
       <a class="btn-ghost" id="link-alignment" style="display:none;">Vezi alignment</a>
     </div>
 
@@ -77,6 +79,7 @@
         Expunerea/balansul de alb variaza intre cadre (nu e fixat pe camera)
       </label>
       <button class="btn" id="btn-train" style="display:none;">Porneste antrenarea</button>
+      <button class="btn-danger" id="btn-cancel-train" style="display:none;" type="button">Opreste antrenarea</button>
       <a class="btn-ghost" id="link-training" style="display:none;" download>Descarca splat-ul</a>
     </div>
 
@@ -302,8 +305,10 @@
     const ingestionDone = stageStatus(stages, "ingestion") === "done";
     const extractionDone = stageStatus(stages, "frame_extraction") === "done";
     const alignmentDone = stageStatus(stages, "alignment") === "done";
+    const alignmentRunning = stageStatus(stages, "alignment") === "running";
     const recommendationDone = stageStatus(stages, "recommendation") === "done";
     const trainingDone = stageStatus(stages, "training") === "done";
+    const trainingRunning = stageStatus(stages, "training") === "running";
 
     document.getElementById("btn-extract").style.display =
       ingestionDone && !extractionDone ? "block" : "none";
@@ -316,7 +321,8 @@
     framesLink.href = `/frames.html?id=${jobId}`;
 
     document.getElementById("btn-align").style.display =
-      extractionDone && !alignmentDone ? "block" : "none";
+      extractionDone && !alignmentDone && !alignmentRunning ? "block" : "none";
+    document.getElementById("btn-cancel-align").style.display = alignmentRunning ? "block" : "none";
 
     const alignmentLink = document.getElementById("link-alignment");
     alignmentLink.style.display = alignmentDone ? "block" : "none";
@@ -330,7 +336,8 @@
     recommendationLink.href = `/recommendation.html?id=${jobId}`;
 
     document.getElementById("btn-train").style.display =
-      alignmentDone && !trainingDone ? "block" : "none";
+      alignmentDone && !trainingDone && !trainingRunning ? "block" : "none";
+    document.getElementById("btn-cancel-train").style.display = trainingRunning ? "block" : "none";
 
     const trainingLink = document.getElementById("link-training");
     trainingLink.style.display = trainingDone ? "block" : "none";
@@ -526,6 +533,14 @@
     stopPolling = startPolling();
   });
 
+  document.getElementById("btn-cancel-align").addEventListener("click", async () => {
+    if (!confirm("Sigur vrei sa opresti alignment-ul? Progresul curent se pierde.")) return;
+    await apiPost(`/jobs/${jobId}/align/cancel`, {});
+    refresh();
+    stopPolling();
+    stopPolling = startPolling();
+  });
+
   document.getElementById("btn-recommend").addEventListener("click", async () => {
     await apiPost(`/jobs/${jobId}/recommend`, {});
     refresh();
@@ -536,6 +551,14 @@
   document.getElementById("btn-train").addEventListener("click", async () => {
     const variableExposure = document.getElementById("train-variable-exposure").checked;
     await apiPost(`/jobs/${jobId}/train`, { variable_exposure: variableExposure });
+    refresh();
+    stopPolling();
+    stopPolling = startPolling();
+  });
+
+  document.getElementById("btn-cancel-train").addEventListener("click", async () => {
+    if (!confirm("Sigur vrei sa opresti antrenarea? Progresul curent se pierde.")) return;
+    await apiPost(`/jobs/${jobId}/train/cancel`, {});
     refresh();
     stopPolling();
     stopPolling = startPolling();

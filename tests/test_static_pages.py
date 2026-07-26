@@ -61,6 +61,12 @@ def test_job_page_contains_story_view_and_action_buttons(client):
     assert 'id="btn-recommend"' in response.text
 
 
+def test_job_page_contains_home_link(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert 'class="home-link" href="/"' in response.text
+
+
 def test_frames_page_contains_frame_grid(client):
     response = client.get("/frames.html")
     assert response.status_code == 200
@@ -97,6 +103,15 @@ def test_job_page_contains_align_button(client):
     response = client.get("/job.html")
     assert response.status_code == 200
     assert 'id="btn-align"' in response.text
+
+
+def test_job_page_contains_cancel_buttons_for_align_and_train(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert 'id="btn-cancel-align"' in response.text
+    assert 'id="btn-cancel-train"' in response.text
+    assert "/align/cancel" in response.text
+    assert "/train/cancel" in response.text
 
 
 def test_alignment_page_served(client):
@@ -140,10 +155,10 @@ def test_job_page_restarts_polling_after_each_action():
     content = (Path(__file__).resolve().parent.parent / "static" / "job.html").read_text(
         encoding="utf-8"
     )
-    # 1 initial assignment (`let stopPolling = startPolling()`) + 7 button
-    # handlers (add-clip-upload/import-frames/extract/align/recommend/train/
-    # export) each reassigning it after apiPost.
-    assert content.count("stopPolling = startPolling()") == 8
+    # 1 initial assignment (`let stopPolling = startPolling()`) + 9 button
+    # handlers (add-clip-upload/import-frames/extract/align/cancel-align/
+    # recommend/train/cancel-train/export) each reassigning it after apiPost.
+    assert content.count("stopPolling = startPolling()") == 10
 
 
 def test_job_page_contains_story_slides_for_every_stage(client):

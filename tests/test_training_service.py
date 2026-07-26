@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app import training_service
+from app import process_registry, training_service
 from app.hardware import GpuInfo, HardwareInfo, UsageSnapshot
 from app.lichtfeld import LichtFeldError, TrainingResult
 from app.paths import alignment_dir
@@ -49,7 +49,7 @@ def test_compute_training_updates_job_and_stage(job_store, tmp_path, monkeypatch
     fake_result = TrainingResult(splat_path=tmp_path / "out" / "result.ply", log="training ok")
     captured = {}
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress, on_process_start=None):
         captured["data_path"] = data_path
         captured["output_dir"] = output_dir
         captured["max_gaussians"] = max_gaussians
@@ -107,6 +107,34 @@ def test_compute_training_marks_stage_failed_on_lichtfeld_error(job_store, tmp_p
     assert stage.error == "CUDA out of memory"
 
 
+def test_compute_training_reports_friendly_message_when_cancelled(job_store, tmp_path, monkeypatch):
+    _patch_diagnostics(monkeypatch)
+    job = job_store.create_job("Test")
+    job_store.update_job(
+        job.id,
+        colmap_sparse_dir=str(tmp_path / "sparse" / "0"),
+        undistorted_images_dir=str(tmp_path / "images"),
+    )
+
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress, on_process_start):
+        fake_process = MagicMock()
+        fake_process.poll.return_value = None
+        on_process_start(fake_process)
+        process_registry.cancel(job.id, "training")
+        raise LichtFeldError("LichtFeld Studio exited with -9")
+
+    monkeypatch.setattr(training_service, "run_training", fake_run_training)
+
+    with pytest.raises(training_service.TrainingError, match="anulata de utilizator"):
+        training_service.compute_training(job_store, job.id)
+
+    stage = job_store.get_stage(job.id, "training")
+    assert stage.status == "failed"
+    assert stage.error == "Antrenare anulata de utilizator"
+    # registry entry must be cleaned up regardless of outcome
+    assert process_registry.cancel(job.id, "training") is False
+
+
 def test_compute_training_marks_stage_failed_on_non_lichtfeld_error(job_store, tmp_path, monkeypatch):
     _patch_diagnostics(monkeypatch)
     job = job_store.create_job("Test")
@@ -137,7 +165,7 @@ def test_compute_training_passes_max_gaussians_from_recommendation(job_store, tm
 
     captured = {}
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress, on_process_start=None):
         captured["max_gaussians"] = max_gaussians
         return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
 
@@ -159,7 +187,7 @@ def test_compute_training_omits_max_gaussians_when_no_recommendation(job_store, 
 
     captured = {}
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress, on_process_start=None):
         captured["max_gaussians"] = max_gaussians
         return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
 
@@ -179,7 +207,7 @@ def test_compute_training_forwards_progress_to_job_store(job_store, tmp_path, mo
         undistorted_images_dir=str(tmp_path / "images"),
     )
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress, on_process_start=None):
         on_progress(20.0)
         on_progress(80.0)
         return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
@@ -203,7 +231,7 @@ def test_compute_training_passes_variable_exposure_as_bilateral_grid(job_store, 
 
     captured = {}
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress, on_process_start=None):
         captured["bilateral_grid"] = bilateral_grid
         return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
 
@@ -227,7 +255,7 @@ def test_compute_training_logs_metrics_on_success(job_store, tmp_path, monkeypat
         undistorted_images_dir=str(tmp_path / "images"),
     )
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress, on_process_start=None):
         on_progress(50.0)
         on_progress(100.0)
         return TrainingResult(splat_path=tmp_path / "result.ply", log="Final splats: 4800000")

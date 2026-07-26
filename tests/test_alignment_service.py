@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app import alignment_service
+from app import alignment_service, process_registry
 from app.realityscan import AlignmentResult, RealityScanError
 
 
@@ -62,6 +62,31 @@ def test_compute_alignment_marks_stage_failed_on_realityscan_error(job_store, tm
     assert stage.error == "export failed"
 
 
+def test_compute_alignment_reports_friendly_message_when_cancelled(job_store, tmp_path, monkeypatch):
+    job = job_store.create_job("Test")
+    job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"))
+
+    def fake_run_alignment(
+        frames_dir, output_dir, *, progress_path, on_progress, timeout_seconds, on_process_start
+    ):
+        fake_process = MagicMock()
+        fake_process.poll.return_value = None
+        on_process_start(fake_process)
+        process_registry.cancel(job.id, "alignment")
+        raise RealityScanError("RealityScan exited with -9")
+
+    monkeypatch.setattr(alignment_service, "run_alignment", fake_run_alignment)
+
+    with pytest.raises(alignment_service.AlignmentError, match="anulat de utilizator"):
+        alignment_service.compute_alignment(job_store, job.id)
+
+    stage = job_store.get_stage(job.id, "alignment")
+    assert stage.status == "failed"
+    assert stage.error == "Alignment anulat de utilizator"
+    # registry entry must be cleaned up regardless of outcome
+    assert process_registry.cancel(job.id, "alignment") is False
+
+
 def test_compute_alignment_marks_stage_failed_on_non_realityscan_error(job_store, tmp_path, monkeypatch):
     job = job_store.create_job("Test")
     job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"))
@@ -82,7 +107,9 @@ def test_compute_alignment_forwards_progress_to_job_store(job_store, tmp_path, m
     job = job_store.create_job("Test")
     job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"))
 
-    def fake_run_alignment(frames_dir, output_dir, *, progress_path, on_progress, timeout_seconds):
+    def fake_run_alignment(
+        frames_dir, output_dir, *, progress_path, on_progress, timeout_seconds, on_process_start=None
+    ):
         on_progress(40.0)
         on_progress(95.0)
         return AlignmentResult(

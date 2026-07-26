@@ -48,6 +48,15 @@ body { padding: 20px 16px 80px; max-width: 480px; margin: 0 auto; }
 
 h1 { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; margin: 4px 0 2px; }
 .subtitle { color: var(--ink-dim); font-size: 13px; margin: 0 0 16px; }
+.home-link {
+  display: inline-block;
+  color: var(--ink-dim);
+  font-size: 13px;
+  text-decoration: none;
+  margin-bottom: 6px;
+  transition: color 0.2s ease;
+}
+.home-link:active { color: var(--ink); }
 
 .card {
   background: linear-gradient(180deg, #131315 0%, #0d0d0f 100%);

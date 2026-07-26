@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -8,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-_EPIC_GAMES_DIR = Path(r"C:\Program Files\Epic Games")
+_EPIC_GAMES_DIR = Path(os.environ.get("SPLATPREP_REALITYSCAN_DIR", r"C:\Program Files\Epic Games"))
 _PROGRESS_LINE_RE = re.compile(r"^\d+\s+([\d.]+)\s+")
 _COLMAP_EXPORT_PARAMS = Path(__file__).resolve().parent / "resources" / "realityscan_colmap_export.xml"
 
@@ -56,6 +57,7 @@ def run_alignment(
     progress_path: Path | None = None,
     timeout_seconds: int = 600,
     on_progress: Callable[[float], None] | None = None,
+    on_process_start: Callable[[subprocess.Popen], None] | None = None,
 ) -> AlignmentResult:
     binary = _realityscan_binary()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -94,6 +96,8 @@ def run_alignment(
     ]
 
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    if on_process_start is not None:
+        on_process_start(process)
     deadline = time.monotonic() + timeout_seconds
     last_reported: float | None = None
 

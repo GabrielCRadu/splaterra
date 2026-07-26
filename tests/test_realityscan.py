@@ -94,6 +94,27 @@ def test_run_alignment_returns_result_on_success(tmp_path, monkeypatch):
     assert "aligned ok" in result.log
 
 
+def test_run_alignment_calls_on_process_start_with_the_popen_object(tmp_path, monkeypatch):
+    monkeypatch.setattr(realityscan.shutil, "which", lambda name: "C:/fake/RealityScan.exe")
+    monkeypatch.setattr(realityscan.time, "sleep", lambda _: None)
+
+    output_dir = tmp_path / "out"
+    fake_process = _fake_process(0, "aligned ok")
+
+    def fake_popen(command, stdout, stderr, text):
+        _write_fake_colmap_output(output_dir)
+        return fake_process
+
+    monkeypatch.setattr(realityscan.subprocess, "Popen", fake_popen)
+    seen = {}
+
+    realityscan.run_alignment(
+        tmp_path / "frames", output_dir, on_process_start=lambda p: seen.setdefault("process", p)
+    )
+
+    assert seen["process"] is fake_process
+
+
 def test_run_alignment_reports_progress_from_progress_file(tmp_path, monkeypatch):
     monkeypatch.setattr(realityscan.shutil, "which", lambda name: "C:/fake/RealityScan.exe")
 

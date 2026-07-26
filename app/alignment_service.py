@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
+from app import process_registry
 from app.job_store import JobStore
 from app.paths import alignment_dir
 from app.realityscan import AlignmentResult, run_alignment
@@ -59,10 +60,18 @@ def compute_alignment(store: JobStore, job_id: str) -> AlignmentResult:
             progress_path=progress_path,
             on_progress=report_progress,
             timeout_seconds=_alignment_timeout(job.frame_count),
+            on_process_start=lambda p: process_registry.register(job_id, "alignment", p),
         )
     except Exception as exc:
-        store.upsert_stage(job_id, "alignment", "failed", finished_at=_now(), error=str(exc))
-        raise AlignmentError(str(exc)) from exc
+        message = (
+            "Alignment anulat de utilizator"
+            if process_registry.was_cancelled(job_id, "alignment")
+            else str(exc)
+        )
+        store.upsert_stage(job_id, "alignment", "failed", finished_at=_now(), error=message)
+        raise AlignmentError(message) from exc
+    finally:
+        process_registry.unregister(job_id, "alignment")
 
     store.update_job(
         job_id,

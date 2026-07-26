@@ -40,6 +40,36 @@ def test_train_endpoint_unknown_job_returns_404(client):
     assert response.status_code == 404
 
 
+def test_cancel_train_endpoint_unknown_job_returns_404(client):
+    response = client.post("/jobs/does-not-exist/train/cancel")
+    assert response.status_code == 404
+
+
+def test_cancel_train_endpoint_reports_false_when_nothing_running(client):
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+    response = client.post(f"/jobs/{job_id}/train/cancel")
+    assert response.status_code == 200
+    assert response.json() == {"cancelled": False}
+
+
+def test_cancel_train_endpoint_kills_registered_process(client, monkeypatch):
+    from unittest.mock import MagicMock
+
+    from app import process_registry
+
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+    process = MagicMock()
+    process.poll.return_value = None
+    process_registry.register(job_id, "training", process)
+
+    response = client.post(f"/jobs/{job_id}/train/cancel")
+
+    assert response.status_code == 200
+    assert response.json() == {"cancelled": True}
+    process.kill.assert_called_once()
+    process_registry.unregister(job_id, "training")
+
+
 def test_get_training_not_yet_computed_returns_404(client):
     job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
     response = client.get(f"/jobs/{job_id}/training")

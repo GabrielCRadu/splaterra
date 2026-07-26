@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from app import process_registry
 from app.deps import get_job_store, run_with_new_store
 from app.job_store import JobStore
 from app.training_service import compute_training
@@ -30,6 +31,15 @@ def train_endpoint(
         run_with_new_store, compute_training, job_id, variable_exposure=body.variable_exposure
     )
     return {"status": "started"}
+
+
+@router.post("/{job_id}/train/cancel")
+def cancel_train_endpoint(
+    job_id: str, store: JobStore = Depends(get_job_store)
+) -> dict[str, bool]:
+    if store.get_job(job_id) is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"cancelled": process_registry.cancel(job_id, "training")}
 
 
 @router.get("/{job_id}/training")

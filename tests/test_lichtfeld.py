@@ -93,6 +93,26 @@ def test_run_training_includes_max_cap_flag_when_given(tmp_path, monkeypatch):
     assert captured["command"][index + 1] == "2000000"
 
 
+def test_run_training_calls_on_process_start_with_the_popen_object(tmp_path, monkeypatch):
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+    output_dir = tmp_path / "out"
+    fake_process = _make_process_with_output(process=_fake_popen_result(0), text="")
+
+    def fake_popen(command, stdout, stderr, text, bufsize):
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "result.ply").write_bytes(b"fake ply")
+        return fake_process
+
+    monkeypatch.setattr(lichtfeld.subprocess, "Popen", fake_popen)
+    seen = {}
+
+    lichtfeld.run_training(
+        tmp_path / "data", output_dir, on_process_start=lambda p: seen.setdefault("process", p)
+    )
+
+    assert seen["process"] is fake_process
+
+
 def test_run_training_omits_bilateral_grid_flag_by_default(tmp_path, monkeypatch):
     monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
     output_dir = tmp_path / "out"
