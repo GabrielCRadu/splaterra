@@ -3,8 +3,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
+from app.ingestion import list_raw_videos
 from app.job_store import JobStore
-from app.paths import frames_dir
+from app.paths import frames_dir, raw_dir
 from app.sharp_frames import ExtractionResult, run_extraction
 
 
@@ -44,9 +45,16 @@ def extract_frames(
     def report_progress(percent: float) -> None:
         store.upsert_stage(job_id, "frame_extraction", "running", progress_percent=percent)
 
+    # 2+ real video files on disk means a multi-clip job: sharp-frames auto-detects
+    # a directory input and processes every video, combining frame candidates from
+    # all of them (see app/sharp_frames.py). 0 or 1 real file (including tests that
+    # set raw_video_path without creating a real file) keeps the original behavior.
+    videos = list_raw_videos(job_id)
+    input_path = raw_dir(job_id) if len(videos) > 1 else Path(job.raw_video_path)
+
     try:
         result: ExtractionResult = run_extraction(
-            Path(job.raw_video_path),
+            input_path,
             output_dir,
             selection_method=selection_method,
             num_frames=num_frames,

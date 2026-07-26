@@ -78,6 +78,29 @@ def test_extract_frames_marks_stage_failed_on_non_sharpframes_error(job_store, t
     assert stage.error == "disk full"
 
 
+def test_extract_frames_uses_raw_dir_when_multiple_clips_ingested(job_store, monkeypatch):
+    from app.paths import raw_dir
+
+    job = job_store.create_job("Test")
+    directory = raw_dir(job.id)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "a_clip.mp4").write_bytes(b"fake")
+    (directory / "b_clip.mp4").write_bytes(b"fake")
+    job_store.update_job(job.id, raw_video_path=str(directory / "a_clip.mp4"))
+
+    captured = {}
+
+    def fake_run_extraction(input_path, output_dir, *, selection_method, num_frames, fps, on_progress):
+        captured["input_path"] = input_path
+        return ExtractionResult(frames=[Path("f1.jpg")], log="ok")
+
+    monkeypatch.setattr(extraction, "run_extraction", fake_run_extraction)
+
+    extraction.extract_frames(job_store, job.id)
+
+    assert captured["input_path"] == directory
+
+
 def test_extract_frames_forwards_progress_to_job_store(job_store, tmp_path, monkeypatch):
     job = job_store.create_job("Test")
     job_store.update_job(job.id, raw_video_path=str(tmp_path / "video.mp4"))

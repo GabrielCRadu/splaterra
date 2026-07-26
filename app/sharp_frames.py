@@ -47,7 +47,7 @@ def _reader_thread(stream, output_queue: queue.Queue) -> None:
 
 
 def run_extraction(
-    video_path: Path,
+    input_path: Path,
     output_dir: Path,
     *,
     selection_method: str = "best-n",
@@ -56,12 +56,16 @@ def run_extraction(
     on_progress: Callable[[float], None] | None = None,
     timeout_seconds: int = 1800,
 ) -> ExtractionResult:
+    # input_path may be a single video file or a directory containing
+    # multiple video files - sharp-frames' own detect_input_type() auto-detects
+    # which one it is (verified directly against the installed package) and
+    # handles multi-video extraction/attribution internally, no extra flag needed.
     binary = _sharp_frames_binary()
     output_dir.mkdir(parents=True, exist_ok=True)
 
     command = [
         binary,
-        str(video_path),
+        str(input_path),
         str(output_dir),
         "--fps",
         str(fps),
