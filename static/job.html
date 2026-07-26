@@ -268,6 +268,7 @@
     document.getElementById("extract-fps").value = extraction.fps;
     document.getElementById("extract-num-frames").value = extraction.num_frames;
     document.getElementById("extract-method").value = extraction.selection_method;
+    extractMethodSelect.sync();
     document.getElementById("extract-settings-hint").textContent = hint;
 
     const videoInfoHint = document.getElementById("video-info-hint");
@@ -389,6 +390,9 @@
     }
     renderStages(lastStages);
   });
+
+  const extractMethodSelect = initCustomSelect(document.getElementById("extract-method"));
+  initCustomSelect(document.getElementById("export-format"));
 
   refresh();
   let stopPolling = startPolling();

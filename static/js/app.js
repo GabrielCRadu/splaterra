@@ -78,6 +78,93 @@ async function uploadFileToJob(jobId, file, onProgress) {
   await apiPost(`/jobs/${jobId}/uploads/${uploadId}/complete`, {});
 }
 
+function initCustomSelect(select) {
+  // Native <select> popups are rendered by the OS/browser and can't be
+  // reskinned reliably across browsers - this builds a themed replacement UI
+  // while keeping the original <select> (hidden) as the source of truth, so
+  // any existing code reading/writing select.value keeps working unchanged.
+  select.style.display = "none";
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "custom-select";
+
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "custom-select-trigger";
+  trigger.innerHTML = '<span class="custom-select-value"></span><span class="custom-select-arrow">&#9662;</span>';
+
+  const panel = document.createElement("div");
+  panel.className = "custom-select-panel";
+
+  function labelFor(value) {
+    const match = Array.from(select.options).find((opt) => opt.value === value);
+    return match ? match.textContent : "";
+  }
+
+  function close() {
+    panel.classList.remove("open");
+    trigger.classList.remove("open");
+  }
+
+  function renderOptions() {
+    panel.innerHTML = "";
+    Array.from(select.options).forEach((opt) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "custom-select-option";
+      if (opt.value === select.value) {
+        item.classList.add("selected");
+      }
+      item.textContent = opt.textContent;
+      item.addEventListener("click", () => {
+        select.value = opt.value;
+        select.dispatchEvent(new Event("change"));
+        sync();
+        close();
+      });
+      panel.appendChild(item);
+    });
+  }
+
+  function open() {
+    renderOptions();
+    panel.classList.add("open");
+    trigger.classList.add("open");
+  }
+
+  function sync() {
+    trigger.querySelector(".custom-select-value").textContent = labelFor(select.value);
+  }
+
+  trigger.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (panel.classList.contains("open")) {
+      close();
+    } else {
+      open();
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!wrapper.contains(event.target)) {
+      close();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      close();
+    }
+  });
+
+  sync();
+  wrapper.appendChild(trigger);
+  wrapper.appendChild(panel);
+  select.insertAdjacentElement("afterend", wrapper);
+
+  return { sync };
+}
+
 function pollUsage(onUpdate, intervalMs) {
   intervalMs = intervalMs || 2000;
   let stopped = false;

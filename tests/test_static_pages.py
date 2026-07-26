@@ -130,6 +130,28 @@ def test_job_page_restarts_polling_after_each_action():
     assert content.count("stopPolling = startPolling()") == 9
 
 
+def test_job_page_uses_custom_select_for_dropdowns(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert "initCustomSelect" in response.text
+    assert 'initCustomSelect(document.getElementById("extract-method"))' in response.text
+    assert 'initCustomSelect(document.getElementById("export-format"))' in response.text
+
+
+def test_app_js_defines_custom_select_helper(client):
+    response = client.get("/js/app.js")
+    assert response.status_code == 200
+    assert "function initCustomSelect" in response.text
+
+
+def test_css_defines_custom_select_styles(client):
+    response = client.get("/css/app.css")
+    assert response.status_code == 200
+    assert ".custom-select-trigger" in response.text
+    assert ".custom-select-panel" in response.text
+    assert ".custom-select-option" in response.text
+
+
 def test_job_page_contains_progress_bar_styles_and_render_hook(client):
     response = client.get("/job.html")
     assert response.status_code == 200
