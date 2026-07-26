@@ -176,6 +176,33 @@ def test_compute_training_passes_max_gaussians_from_recommendation(job_store, tm
     assert captured["max_gaussians"] == 3_000_000
 
 
+def test_compute_training_reduces_max_gaussians_for_large_frame_count(job_store, tmp_path, monkeypatch):
+    # Real crash: a 12GB RTX 3060 hit CUDA OOM at max_gaussians=4_800_000 on
+    # an 830-image job - training should ask for meaningfully less, not blindly
+    # trust a cap computed before extraction knew the real frame count.
+    _patch_diagnostics(monkeypatch)
+    job = job_store.create_job("Test")
+    job_store.update_job(
+        job.id,
+        colmap_sparse_dir=str(tmp_path / "sparse" / "0"),
+        undistorted_images_dir=str(tmp_path / "images"),
+        frame_count=830,
+        recommendation_json=json.dumps({"lichtfeld": {"max_gaussians": 4_800_000, "bf16": True}}),
+    )
+
+    captured = {}
+
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, on_progress, on_process_start=None):
+        captured["max_gaussians"] = max_gaussians
+        return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
+
+    monkeypatch.setattr(training_service, "run_training", fake_run_training)
+
+    training_service.compute_training(job_store, job.id)
+
+    assert captured["max_gaussians"] < 4_800_000
+
+
 def test_compute_training_omits_max_gaussians_when_no_recommendation(job_store, tmp_path, monkeypatch):
     _patch_diagnostics(monkeypatch)
     job = job_store.create_job("Test")
@@ -298,3 +325,37 @@ def test_compute_training_logs_metrics_on_failure(job_store, tmp_path, monkeypat
     metrics = recorded[0]
     assert metrics.status == "failed"
     assert metrics.error == "CUDA out of memory"
+
+
+def test_compute_training_parses_num_images_from_failed_run_log(job_store, tmp_path, monkeypatch):
+    # LichtFeldError's message embeds the raw CLI log (see app/lichtfeld.py) -
+    # a failed/crashed run must still get parsed for calibration data instead
+    # of throwing the log away, or exactly the OOM crashes that need
+    # calibrating against never make it into data/training_runs.jsonl.
+    recorded = _patch_diagnostics(monkeypatch)
+    job = job_store.create_job("Test")
+    job_store.update_job(
+        job.id,
+        colmap_sparse_dir=str(tmp_path / "sparse" / "0"),
+        undistorted_images_dir=str(tmp_path / "images"),
+    )
+
+    monkeypatch.setattr(
+        training_service,
+        "run_training",
+        MagicMock(
+            side_effect=LichtFeldError(
+                "LichtFeld Studio exited with 3221226505:\n"
+                "colmap.cpp:927 Read 830 cameras and 830 images from COLMAP text files\n"
+                "colmap_loader.cpp:227 Loaded 1064510 points from COLMAP text file\n"
+                "CUDA out of memory: failed to allocate 79626240 bytes"
+            )
+        ),
+    )
+
+    with pytest.raises(training_service.TrainingError):
+        training_service.compute_training(job_store, job.id)
+
+    metrics = recorded[0]
+    assert metrics.num_images == 830
+    assert metrics.num_initial_points == 1064510

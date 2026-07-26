@@ -1,6 +1,6 @@
 from app.drone_telemetry import DroneTelemetry
 from app.hardware import GpuInfo, HardwareInfo
-from app.recommendation import recommend, recommend_extraction
+from app.recommendation import max_gaussians_for_vram, recommend, recommend_extraction
 from app.video_metadata import VideoMetadata
 
 VIDEO_1080P = VideoMetadata(width=1920, height=1080, fps=30.0, duration_seconds=10.0, codec="h264")
@@ -127,3 +127,32 @@ def test_recommend_extraction_long_clip_uses_min_fps_and_caps_frames():
 def test_recommend_included_in_full_recommendation():
     rec = recommend(VIDEO_1080P, NO_DRONE, STRONG_GPU_HW)
     assert rec.extraction == recommend_extraction(VIDEO_1080P)
+
+
+def test_max_gaussians_for_vram_no_gpu_is_zero():
+    assert max_gaussians_for_vram(0.0) == 0
+
+
+def test_max_gaussians_for_vram_without_frame_count_matches_vram_only_formula():
+    # No frame_count (e.g. computed before extraction has run) - matches the
+    # original VRAM-only formula exactly.
+    assert max_gaussians_for_vram(12.0) == 4_800_000
+
+
+def test_max_gaussians_for_vram_reduces_cap_for_large_image_counts():
+    # 830 images (the real job that hit CUDA OOM at max_gaussians=4_800_000
+    # on a 12GB GPU) must land meaningfully below the VRAM-only figure.
+    reduced = max_gaussians_for_vram(12.0, frame_count=830)
+    assert reduced < 4_800_000
+
+
+def test_max_gaussians_for_vram_barely_touches_small_jobs():
+    # 78 images (the real job that succeeded at max_gaussians=4_800_000 on a
+    # 12GB GPU) should stay close to the VRAM-only figure, not be slashed.
+    reduced = max_gaussians_for_vram(12.0, frame_count=78)
+    assert reduced > 4_000_000
+
+
+def test_max_gaussians_for_vram_never_drops_below_floor():
+    reduced = max_gaussians_for_vram(6.0, frame_count=100_000)
+    assert reduced >= 500_000

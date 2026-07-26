@@ -11,7 +11,22 @@ LICHTFELD_MIN_VRAM_GB = 8.0
 BF16_MIN_COMPUTE_CAPABILITY = 8.0
 GAUSSIANS_PER_VRAM_GB = 400_000
 MAX_GAUSSIANS_CAP = 6_000_000
+MIN_MAX_GAUSSIANS = 500_000
 HIGH_RES_PIXEL_THRESHOLD = 3840 * 2160
+
+# LichtFeld's MCMC strategy pre-allocates VRAM for the full max_gaussians
+# CAPACITY upfront (not just the currently-active gaussian count), and the
+# pipelined image loader/nvJPEG decoder pool separately consumes VRAM that
+# scales with how many training images there are. A 12GB RTX 3060 trained
+# successfully with max_gaussians=4_800_000 on a 78-image job, but hit CUDA
+# out-of-memory with the identical cap on an 830-image job - the GPU had
+# only ~565MB free when a routine 79MB image-decode allocation failed.
+# TRAINING_IMAGE_OVERHEAD_MB reserves a per-image VRAM budget before
+# computing gaussians-per-GB from what's left. This is a conservative
+# first-pass guess from a single failure, not a measured constant -
+# recalibrate once more multi-clip training runs are logged (see
+# data/training_runs.jsonl's num_images/final_gaussians columns).
+TRAINING_IMAGE_OVERHEAD_MB = 8
 
 EXTRACTION_MIN_FPS = 2
 EXTRACTION_MAX_FPS = 10
@@ -78,6 +93,14 @@ def recommend_extraction(video: VideoMetadata) -> ExtractionSettings:
     return ExtractionSettings(fps=fps, num_frames=num_frames, selection_method="batched")
 
 
+def max_gaussians_for_vram(vram_gb: float, frame_count: int | None = None) -> int:
+    if vram_gb <= 0:
+        return 0
+    reserved_gb = (frame_count * TRAINING_IMAGE_OVERHEAD_MB / 1024) if frame_count else 0.0
+    available_gb = max(0.0, vram_gb - reserved_gb)
+    return max(MIN_MAX_GAUSSIANS, min(MAX_GAUSSIANS_CAP, int(available_gb * GAUSSIANS_PER_VRAM_GB)))
+
+
 def recommend(
     video: VideoMetadata,
     drone: DroneTelemetry | None,
@@ -93,7 +116,10 @@ def recommend(
 
     gpu = hardware.gpu
     vram_gb = gpu.vram_mb / 1024 if gpu else 0.0
-    max_gaussians = min(MAX_GAUSSIANS_CAP, int(vram_gb * GAUSSIANS_PER_VRAM_GB))
+    # frame_count isn't known yet at recommendation time (extraction hasn't
+    # run) - this is a VRAM-only estimate; app/training_service.py recomputes
+    # a frame-count-aware cap once the real count is known.
+    max_gaussians = max_gaussians_for_vram(vram_gb)
     bf16 = gpu is not None and gpu.compute_capability >= BF16_MIN_COMPUTE_CAPABILITY
     lichtfeld = LichtFeldSettings(max_gaussians=max_gaussians, bf16=bf16)
 
