@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.api.alignment import router as alignment_router
+from app.api.export import router as export_router
 from app.api.frames import router as frames_router
 from app.api.hardware import router as hardware_router
 from app.api.ingestion import router as ingestion_router
@@ -19,6 +20,7 @@ app.include_router(hardware_router)
 app.include_router(recommendation_router)
 app.include_router(alignment_router)
 app.include_router(training_router)
+app.include_router(export_router)
 
 
 @app.get("/health")
