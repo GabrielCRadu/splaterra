@@ -6,7 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from app.deps import get_job_store, run_with_new_store
-from app.ingestion import import_local_file
+from app.ingestion import import_local_file, list_raw_videos
 from app.job_store import JobStore
 from app.uploads import UploadError, complete_upload, received_chunks, save_chunk, start_upload
 
@@ -33,6 +33,13 @@ def ingest_local(
         raise HTTPException(status_code=404, detail="Job not found")
     background_tasks.add_task(run_with_new_store, import_local_file, job_id, Path(body.source_path))
     return {"status": "started"}
+
+
+@router.get("/{job_id}/raw-videos")
+def get_raw_videos(job_id: str, store: JobStore = Depends(get_job_store)) -> dict[str, list[str]]:
+    if store.get_job(job_id) is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"videos": [p.name for p in list_raw_videos(job_id)]}
 
 
 @router.post("/{job_id}/uploads")
