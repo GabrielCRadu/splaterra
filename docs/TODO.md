@@ -18,8 +18,12 @@ Backlog de idei, in orice ordine. Adaugat de owner, de rezolvat de Claude in ses
       (metadata video, deja disponibila prin `app/video_metadata.py`/ffprobe).
 - [ ] Metoda de extragere implicita noua: batch selection, cu aceeasi logica ca pe
       https://sharp-frames.reflct.app/ (referinta data de owner pentru comportamentul exact dorit).
-- [ ] Posibilitatea de a incarca direct cadre deja extrase (skip peste extragerea automata), plus
-      posibilitatea de a adauga mai mult de un clip video per job.
+- [ ] Posibilitatea de a incarca direct cadre deja extrase (skip peste extragerea automata).
+- [x] Posibilitatea de a adauga mai mult de un clip video per job. `sharp-frames` suporta nativ
+      un director cu mai multe video-uri (auto-detectat) — extragerea trimite `raw_dir(job_id)`
+      in loc de un fisier cand sunt 2+ clipuri ingerate, iar recomandarea insumeaza durata pe
+      toate clipurile. UI nou pe pagina jobului: lista de clipuri + adaugare inca unul. Facut in
+      `40953e0` (si commit-urile precedente din aceeasi sesiune).
 - [x] Buton "advanced view" (per stage sau global pe job) ca sa vezi output-ul brut al CLI-urilor
       RealityScan si LichtFeld. Toggle per stage in `static/job.html`, expune `job_stages.log`
       (deja salvat, doar nu era afisat). Facut in `3c46de4`.
