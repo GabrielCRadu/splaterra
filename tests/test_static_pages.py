@@ -117,9 +117,9 @@ def test_job_page_restarts_polling_after_each_action():
     content = (Path(__file__).resolve().parent.parent / "static" / "job.html").read_text(
         encoding="utf-8"
     )
-    # 1 initial assignment (`let stopPolling = startPolling()`) + 3 button
-    # handlers (extract/align/recommend) each reassigning it after apiPost.
-    assert content.count("stopPolling = startPolling()") == 4
+    # 1 initial assignment (`let stopPolling = startPolling()`) + 4 button
+    # handlers (extract/align/recommend/train) each reassigning it after apiPost.
+    assert content.count("stopPolling = startPolling()") == 5
 
 
 def test_job_page_contains_progress_bar_styles_and_render_hook(client):
@@ -128,3 +128,10 @@ def test_job_page_contains_progress_bar_styles_and_render_hook(client):
     assert "progress-track" in response.text
     assert "progress-fill" in response.text
     assert "progress-indeterminate" in response.text
+
+
+def test_job_page_contains_train_button_and_download_link(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert 'id="btn-train"' in response.text
+    assert 'id="link-training"' in response.text

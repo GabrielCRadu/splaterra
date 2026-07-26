@@ -25,7 +25,8 @@ default de instalare:
 - `ffmpeg` / `ffprobe` — extragere cadre, citire metadata video
 - `sharp-frames` — selectie cadre sharp (`pip install sharp-frames`)
 - RealityScan — alignment; NU e pe PATH, e descoperit prin fallback la
-  `C:\Program Files\Epic Games\RealityScan_*\RealityScan.exe`
+  `C:\Program Files\Epic Games\RealityScan_*\RealityScan.exe`, sau la directorul indicat de
+  env var `SPLATPREP_REALITYSCAN_DIR` daca instalarea e in alta parte (vezi `app/realityscan.py`).
 
 # Conventii de cod
 
@@ -73,6 +74,9 @@ default de instalare:
   setari RealityScan/LichtFeld + verdict local-vs-cloud.
 - `app/realityscan.py` + `app/alignment_service.py` — wrapper CLI RealityScan (verificat pe
   binarul real) + serviciul de alignment.
+- `app/lichtfeld.py` + `app/training_service.py` — wrapper CLI LichtFeld Studio (flag-uri
+  verificate pe binarul real; comportamentul unui training real inca neverificat in aceasta
+  sesiune) + serviciul de training local.
 - `app/api/*.py` — router-ele HTTP (thin), unul per domeniu.
 - `static/*.html` + `static/css/app.css` + `static/js/app.js` — UI-ul mobil-first.
 - `tests/` — pytest; `conftest.py` are fixture-urile `job_store` si `client`. Testele
@@ -87,11 +91,14 @@ fisierele mari nu se dubleaza — se tin referinte la cai in SQLite.
 # Stadiu implementare
 
 Facut (in `master`): fundatie (job store, ingestie, extragere cadre) · recomandare (metadata +
-hardware + motor) · UI mobil + task-uri in fundal + polling · alignment RealityScan.
+hardware + motor) · UI mobil + task-uri in fundal + polling · alignment RealityScan · training
+LichtFeld local.
 
-De facut: training LichtFeld + integrare RunPod (cloud GPU) — pasul final care produce splat-ul
-Gaussian. Training local nu merge pe acest PC (GPU AMD, fara CUDA); calea reala e RunPod cloud.
-Tailscale: codul e gata (server pe `0.0.0.0`), setup-ul efectiv pe telefon + PC ramane de facut.
+De facut: integrare RunPod (cloud GPU) ca fallback pentru training, pentru cazul in care GPU-ul
+local nu indeplineste cerintele LichtFeld (vezi verdictul `use_cloud` din `app/recommendation.py`;
+infra e deja construita in `app/runpod_client.py`/`app/remote_exec.py`/`app/cloud_job.py`, dar
+nelegata inca de stage-ul de training). Tailscale: codul e gata (server pe `0.0.0.0`), setup-ul
+efectiv pe telefon + PC ramane de facut.
 
 # Practici de lucru (disciplina de sesiune)
 

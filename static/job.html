@@ -34,6 +34,8 @@
 <a class="btn-ghost" id="link-alignment" style="display:none;">Vezi alignment</a>
 <button class="btn" id="btn-recommend" style="display:none;">Calculeaza recomandare</button>
 <a class="btn-ghost" id="link-recommendation" style="display:none;">Vezi recomandarea</a>
+<button class="btn" id="btn-train" style="display:none;">Porneste antrenarea</button>
+<a class="btn-ghost" id="link-training" style="display:none;" download>Descarca splat-ul</a>
 
 <script src="/js/app.js"></script>
 <script>
@@ -43,6 +45,7 @@
     frame_extraction: "Extragere cadre",
     alignment: "Alignment",
     recommendation: "Recomandare",
+    training: "Antrenare",
   };
 
   function progressBarHtml(stage) {
@@ -89,6 +92,7 @@
     const extractionDone = stageStatus(stages, "frame_extraction") === "done";
     const alignmentDone = stageStatus(stages, "alignment") === "done";
     const recommendationDone = stageStatus(stages, "recommendation") === "done";
+    const trainingDone = stageStatus(stages, "training") === "done";
 
     document.getElementById("btn-extract").style.display =
       ingestionDone && !extractionDone ? "block" : "none";
@@ -112,6 +116,13 @@
     const recommendationLink = document.getElementById("link-recommendation");
     recommendationLink.style.display = recommendationDone ? "block" : "none";
     recommendationLink.href = `/recommendation.html?id=${jobId}`;
+
+    document.getElementById("btn-train").style.display =
+      alignmentDone && !trainingDone ? "block" : "none";
+
+    const trainingLink = document.getElementById("link-training");
+    trainingLink.style.display = trainingDone ? "block" : "none";
+    trainingLink.href = `/jobs/${jobId}/training/download`;
   }
 
   async function refresh() {
@@ -195,6 +206,13 @@
 
   document.getElementById("btn-recommend").addEventListener("click", async () => {
     await apiPost(`/jobs/${jobId}/recommend`, {});
+    refresh();
+    stopPolling();
+    stopPolling = startPolling();
+  });
+
+  document.getElementById("btn-train").addEventListener("click", async () => {
+    await apiPost(`/jobs/${jobId}/train`, {});
     refresh();
     stopPolling();
     stopPolling = startPolling();
