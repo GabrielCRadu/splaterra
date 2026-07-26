@@ -237,7 +237,12 @@
     const newStatus = stageStatus(stages, currentStage);
     const prevStatus = lastStatusByStage[currentStage];
 
+    // Ingestion flips to "done" after every single clip upload, not just the
+    // last one - auto-advancing here would sweep the user away mid-way
+    // through adding a second/third clip. Moving past ingestion is always a
+    // manual tap.
     if (
+      currentStage !== "ingestion" &&
       prevStatus !== undefined &&
       prevStatus !== "done" &&
       newStatus === "done" &&
