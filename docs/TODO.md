@@ -14,8 +14,10 @@ Backlog de idei, in orice ordine. Adaugat de owner, de rezolvat de Claude in ses
 - [x] Elimina outline-ul albastru default de focus/tap al browserului pe butoanele din UI.
       Inlocuit cu `:focus-visible` in accent verde (pastreaza accesibilitatea la navigare cu
       tastatura, elimina inelul albastru la tap/click). Facut in `static/css/app.css`.
-- [ ] La ecranul de extragere cadre: afiseaza nr. total de cadre din clip si framerate-ul clipului
-      (metadata video, deja disponibila prin `app/video_metadata.py`/ffprobe).
+- [x] La ecranul de extragere cadre: afiseaza nr. total de cadre din clip si framerate-ul clipului.
+      Endpoint nou `GET /jobs/{id}/video-info` (estimare `round(durata * fps)`, acelasi mod de
+      calcul deja folosit in `app/recommendation.py`), afisat in panoul "Setari extragere" din
+      `static/job.html`. Facut in `1bddf60`.
 - [ ] Metoda de extragere implicita noua: batch selection, cu aceeasi logica ca pe
       https://sharp-frames.reflct.app/ (referinta data de owner pentru comportamentul exact dorit).
 - [ ] Posibilitatea de a incarca direct cadre deja extrase (skip peste extragerea automata).
