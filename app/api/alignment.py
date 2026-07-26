@@ -18,6 +18,12 @@ def align_endpoint(
 ) -> dict[str, str]:
     if store.get_job(job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
+    stage = store.get_stage(job_id, "alignment")
+    if stage is not None and stage.status == "running":
+        # See train_endpoint's identical guard in app/api/training.py for why:
+        # process_registry only tracks one subprocess per (job_id, stage), so
+        # a second concurrent run silently orphans the first from cancellation.
+        raise HTTPException(status_code=409, detail="Alignment is already running for this job")
     background_tasks.add_task(run_with_new_store, compute_alignment, job_id)
     return {"status": "started"}
 

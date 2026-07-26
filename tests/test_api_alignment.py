@@ -22,6 +22,20 @@ def test_align_endpoint_unknown_job_returns_404(client):
     assert response.status_code == 404
 
 
+def test_align_endpoint_rejects_second_request_while_already_running(client):
+    from app import db
+    from app.job_store import JobStore
+
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+    conn = db.connect()
+    JobStore(conn).upsert_stage(job_id, "alignment", "running", started_at="2026-01-01T00:00:00Z")
+    conn.close()
+
+    response = client.post(f"/jobs/{job_id}/align")
+
+    assert response.status_code == 409
+
+
 def test_cancel_align_endpoint_unknown_job_returns_404(client):
     response = client.post("/jobs/does-not-exist/align/cancel")
     assert response.status_code == 404

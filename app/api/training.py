@@ -27,6 +27,15 @@ def train_endpoint(
 ) -> dict[str, str]:
     if store.get_job(job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
+    stage = store.get_stage(job_id, "training")
+    if stage is not None and stage.status == "running":
+        # Real bug this guards against: a stale/cached job.html page (or a
+        # second tab, or a fast double-tap) can fire a second /train while
+        # one is already in flight - process_registry only tracks one
+        # subprocess per (job_id, stage), so the second registration
+        # silently overwrites the first, orphaning it from ever being
+        # cancelable while it keeps consuming GPU/VRAM in the background.
+        raise HTTPException(status_code=409, detail="Training is already running for this job")
     background_tasks.add_task(
         run_with_new_store, compute_training, job_id, variable_exposure=body.variable_exposure
     )

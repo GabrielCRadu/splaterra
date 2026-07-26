@@ -40,6 +40,24 @@ def test_train_endpoint_unknown_job_returns_404(client):
     assert response.status_code == 404
 
 
+def test_train_endpoint_rejects_second_request_while_already_running(client, monkeypatch):
+    # Real bug this guards against: a stale page or fast double-tap firing a
+    # second /train while one is already in flight silently orphans the
+    # first process from process_registry (only one slot per job/stage),
+    # leaving it uncancelable while it keeps running in the background.
+    from app import db
+    from app.job_store import JobStore
+
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+    conn = db.connect()
+    JobStore(conn).upsert_stage(job_id, "training", "running", started_at="2026-01-01T00:00:00Z")
+    conn.close()
+
+    response = client.post(f"/jobs/{job_id}/train")
+
+    assert response.status_code == 409
+
+
 def test_cancel_train_endpoint_unknown_job_returns_404(client):
     response = client.post("/jobs/does-not-exist/train/cancel")
     assert response.status_code == 404
