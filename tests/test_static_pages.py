@@ -257,6 +257,17 @@ def test_job_page_contains_add_clip_section(client):
     assert "upload-row-error" in response.text
 
 
+def test_job_page_has_explicit_continue_button_out_of_ingestion(client):
+    # Auto-advance is deliberately disabled for the ingestion stage (it flips
+    # to "done" after every clip, not just the last one), so there must be an
+    # explicit, discoverable way to move on once the user is actually done
+    # adding clips - not just an undiscoverable tap-to-navigate gesture.
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert 'id="btn-ingestion-continue"' in response.text
+    assert 'getElementById("btn-ingestion-continue").addEventListener("click"' in response.text
+
+
 def test_job_page_contains_export_controls(client):
     response = client.get("/job.html")
     assert response.status_code == 200

@@ -25,6 +25,7 @@
       <button class="btn-ghost" id="btn-add-clip-upload" type="button" style="margin-top:8px;">Incarca</button>
       <p class="subtitle" id="add-clip-status" style="margin:8px 0 0;"></p>
       <div id="add-clip-upload-list"></div>
+      <button class="btn" id="btn-ingestion-continue" type="button" style="display:none; margin-top:16px;">Continua la extragere cadre</button>
     </div>
 
     <div class="story-slide" data-stage="frame_extraction">
@@ -306,6 +307,8 @@
 
     document.getElementById("btn-extract").style.display =
       ingestionDone && !extractionDone ? "block" : "none";
+    document.getElementById("btn-ingestion-continue").style.display =
+      ingestionDone && !extractionDone ? "block" : "none";
     document.getElementById("import-frames-panel").style.display = !extractionDone ? "block" : "none";
 
     const framesLink = document.getElementById("link-frames");
@@ -465,6 +468,10 @@
     refresh();
     stopPolling();
     stopPolling = startPolling();
+  });
+
+  document.getElementById("btn-ingestion-continue").addEventListener("click", () => {
+    goToSlide(STORIES.indexOf("frame_extraction"), { isUserAction: true });
   });
 
   document.getElementById("btn-import-frames").addEventListener("click", async () => {
