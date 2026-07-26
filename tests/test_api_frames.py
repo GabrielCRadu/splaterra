@@ -57,6 +57,33 @@ def test_list_frames_returns_filenames_from_frames_dir(client):
     assert response.json() == {"frames": ["0001.jpg", "0002.jpg"]}
 
 
+def test_list_frames_excludes_non_image_files(client):
+    # Regression test: sharp-frames writes a selected_metadata.json file into
+    # the same output directory as the extracted frames. "selected_metadata.json"
+    # sorts alphabetically after any "frame_XXXXX.jpg" name ('s' > 'f'), so an
+    # unfiltered glob() returned it as the last "frame" - the frontend then
+    # tried to render it as an <img>, showing a broken/missing image for what
+    # looked like the last extracted frame, every single time.
+    from app import db
+    from app.job_store import JobStore
+    from app.paths import frames_dir
+
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+
+    conn = db.connect()
+    directory = frames_dir(job_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "frame_00001.jpg").write_bytes(b"fake")
+    (directory / "frame_00002.jpg").write_bytes(b"fake")
+    (directory / "selected_metadata.json").write_text("{}")
+    JobStore(conn).update_job(job_id, frames_dir=str(directory))
+    conn.close()
+
+    response = client.get(f"/jobs/{job_id}/frames")
+    assert response.status_code == 200
+    assert response.json() == {"frames": ["frame_00001.jpg", "frame_00002.jpg"]}
+
+
 def test_get_frame_returns_file_content(client):
     from app import db
     from app.job_store import JobStore

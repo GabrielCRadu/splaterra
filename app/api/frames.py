@@ -13,6 +13,11 @@ from app.paths import frames_dir
 
 router = APIRouter(prefix="/jobs", tags=["frames"])
 
+# sharp-frames writes a selected_metadata.json alongside the extracted images
+# in the same output directory - only list actual image files, matching the
+# extensions app/sharp_frames.py's run_extraction() already globs for its result.
+_IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
+
 
 class ExtractFramesRequest(BaseModel):
     selection_method: str = "best-n"
@@ -48,7 +53,9 @@ def list_frames(job_id: str, store: JobStore = Depends(get_job_store)) -> dict[s
     if job.frames_dir is None:
         return {"frames": []}
     directory = frames_dir(job_id)
-    names = sorted(p.name for p in directory.glob("*") if p.is_file())
+    names = sorted(
+        p.name for p in directory.glob("*") if p.is_file() and p.suffix.lower() in _IMAGE_SUFFIXES
+    )
     return {"frames": names}
 
 
