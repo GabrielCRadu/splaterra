@@ -41,7 +41,7 @@ Backlog de idei, in orice ordine. Adaugat de owner, de rezolvat de Claude in ses
       procesarii (extragere, alignment, training). Panou live in `static/job.html`, vizibil cat
       timp un stage ruleaza; endpoint nou `GET /hardware/usage` (`app/hardware.py`). Facut in
       `6b76428`.
-- [ ] ETA (timp estimat ramas) pentru alignment si training, afisat langa bara de progres cat timp
-      stage-ul ruleaza.
+- [ ] ETA (timp estimat ramas) si procent de completion (text explicit, ex. "42%", nu doar latimea
+      barei) pentru alignment si training, afisate langa bara de progres cat timp stage-ul ruleaza.
 - [ ] Output CLI in timp real (nu doar dupa ce stage-ul se termina), ascuns dupa acelasi buton
       "advanced view" existent — momentan `job_stages.log` se populeaza abia la final.
