@@ -63,6 +63,7 @@ def run_extraction(
     fps: int = 10,
     on_progress: Callable[[float], None] | None = None,
     on_log: Callable[[str], None] | None = None,
+    on_process_start: Callable[[subprocess.Popen], None] | None = None,
     timeout_seconds: int = 1800,
 ) -> ExtractionResult:
     # input_path may be a single video file or a directory containing
@@ -90,6 +91,8 @@ def run_extraction(
     process = subprocess.Popen(
         command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
     )
+    if on_process_start is not None:
+        on_process_start(process)
     output_queue: queue.Queue = queue.Queue()
     reader = threading.Thread(target=_reader_thread, args=(process.stdout, output_queue), daemon=True)
     reader.start()

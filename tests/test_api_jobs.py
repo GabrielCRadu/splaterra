@@ -4,10 +4,25 @@ def test_create_and_get_job(client):
     created = create_response.json()
     assert created["name"] == "Curte interioara"
     assert created["frame_count"] is None
+    assert created["device_type"] == "standard"
 
     get_response = client.get(f"/jobs/{created['id']}")
     assert get_response.status_code == 200
     assert get_response.json()["id"] == created["id"]
+
+
+def test_create_job_with_device_type(client):
+    response = client.post("/jobs", json={"name": "Zbor drona", "device_type": "dji_avata_360"})
+    assert response.status_code == 200
+    assert response.json()["device_type"] == "dji_avata_360"
+
+    get_response = client.get(f"/jobs/{response.json()['id']}")
+    assert get_response.json()["device_type"] == "dji_avata_360"
+
+
+def test_create_job_rejects_unknown_device_type(client):
+    response = client.post("/jobs", json={"name": "Test", "device_type": "insta360"})
+    assert response.status_code == 422
 
 
 def test_get_unknown_job_returns_404(client):

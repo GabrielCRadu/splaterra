@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
@@ -14,6 +15,7 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 class CreateJobRequest(BaseModel):
     name: str
+    device_type: Literal["standard", "dji_osmo_360", "dji_avata_360"] = "standard"
 
 
 class JobResponse(BaseModel):
@@ -29,6 +31,7 @@ class JobResponse(BaseModel):
     splat_path: str | None
     export_path: str | None
     export_format: str | None
+    device_type: str
 
 
 class JobStageResponse(BaseModel):
@@ -45,7 +48,7 @@ class JobStageResponse(BaseModel):
 def create_job(
     body: CreateJobRequest, store: JobStore = Depends(get_job_store)
 ) -> JobResponse:
-    job = store.create_job(body.name)
+    job = store.create_job(body.name, device_type=body.device_type)
     return JobResponse(**job.__dict__)
 
 

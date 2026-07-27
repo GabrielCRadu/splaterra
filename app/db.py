@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     undistorted_images_dir TEXT,
     splat_path TEXT,
     export_path TEXT,
-    export_format TEXT
+    export_format TEXT,
+    device_type TEXT NOT NULL DEFAULT 'standard'
 );
 
 CREATE TABLE IF NOT EXISTS job_stages (
@@ -67,4 +68,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
     for column in ("export_path", "export_format"):
         if column not in existing_columns:
             conn.execute(f"ALTER TABLE jobs ADD COLUMN {column} TEXT")
+    # device_type is NOT NULL with a real default ("standard"), unlike the
+    # nullable columns above where NULL is the legitimate "not done yet"
+    # value - a bare `ADD COLUMN device_type TEXT` would leave every
+    # pre-existing job's device_type as None, forcing None-coalescing
+    # everywhere device_type is compared against "standard".
+    if "device_type" not in existing_columns:
+        conn.execute("ALTER TABLE jobs ADD COLUMN device_type TEXT NOT NULL DEFAULT 'standard'")
     conn.commit()

@@ -11,15 +11,16 @@ class JobStore:
     def __init__(self, conn: sqlite3.Connection):
         self._conn = conn
 
-    def create_job(self, name: str) -> Job:
+    def create_job(self, name: str, device_type: str = "standard") -> Job:
         job = Job(
             id=str(uuid.uuid4()),
             name=name,
             created_at=datetime.now(timezone.utc).isoformat(),
+            device_type=device_type,
         )
         self._conn.execute(
-            "INSERT INTO jobs (id, name, created_at) VALUES (?, ?, ?)",
-            (job.id, job.name, job.created_at),
+            "INSERT INTO jobs (id, name, created_at, device_type) VALUES (?, ?, ?, ?)",
+            (job.id, job.name, job.created_at, job.device_type),
         )
         self._conn.commit()
         return job
@@ -104,6 +105,7 @@ class JobStore:
             splat_path=row["splat_path"],
             export_path=row["export_path"],
             export_format=row["export_format"],
+            device_type=row["device_type"],
         )
 
     @staticmethod

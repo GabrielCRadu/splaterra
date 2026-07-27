@@ -50,6 +50,27 @@ def test_run_extraction_returns_frames_on_success(tmp_path, monkeypatch):
     assert "extracted 2 frames" in result.log
 
 
+def test_run_extraction_calls_on_process_start_with_the_popen_object(tmp_path, monkeypatch):
+    monkeypatch.setattr(sharp_frames.shutil, "which", lambda name: "/usr/bin/sharp-frames")
+
+    output_dir = tmp_path / "out"
+    fake_process = _fake_popen("done\n", returncode=0)
+
+    def fake_popen(command, stdout, stderr, text, bufsize):
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "frame_0001.jpg").write_bytes(b"fake")
+        return fake_process
+
+    monkeypatch.setattr(sharp_frames.subprocess, "Popen", fake_popen)
+    seen = {}
+
+    sharp_frames.run_extraction(
+        tmp_path / "video.mp4", output_dir, on_process_start=lambda p: seen.setdefault("process", p)
+    )
+
+    assert seen["process"] is fake_process
+
+
 def test_run_extraction_calls_on_log_with_accumulated_output(tmp_path, monkeypatch):
     monkeypatch.setattr(sharp_frames.shutil, "which", lambda name: "/usr/bin/sharp-frames")
 

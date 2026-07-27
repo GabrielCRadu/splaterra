@@ -48,6 +48,16 @@ def test_new_job_page_only_creates_job_and_redirects_to_job_page(client):
     assert 'id="btn-create"' in response.text
     assert "/job.html?id=" in response.text
     assert 'id="file-input"' not in response.text
+
+
+def test_new_job_page_contains_device_type_selector(client):
+    response = client.get("/new-job.html")
+    assert response.status_code == 200
+    assert 'id="device-type"' in response.text
+    assert 'value="standard"' in response.text
+    assert 'value="dji_osmo_360"' in response.text
+    assert 'value="dji_avata_360"' in response.text
+    assert "device_type" in response.text
     assert "local-path" not in response.text
 
 
@@ -114,6 +124,24 @@ def test_job_page_contains_cancel_buttons_for_align_and_train(client):
     assert "/train/cancel" in response.text
 
 
+def test_job_page_contains_cancel_button_for_extraction(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert 'id="btn-cancel-extract"' in response.text
+    assert "/extract-frames/cancel" in response.text
+
+
+def test_job_page_contains_360_settings_and_device_toggle(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert 'id="extract-standard-settings"' in response.text
+    assert 'id="extract-360-settings"' in response.text
+    assert 'id="extract-360-interval"' in response.text
+    assert 'id="extract-360-ai-mask"' in response.text
+    assert 'id="ingestion-360-hint"' in response.text
+    assert "function updateDeviceFieldVisibility" in response.text
+
+
 def test_alignment_page_served(client):
     response = client.get("/alignment.html")
     assert response.status_code == 200
@@ -155,10 +183,11 @@ def test_job_page_restarts_polling_after_each_action():
     content = (Path(__file__).resolve().parent.parent / "static" / "job.html").read_text(
         encoding="utf-8"
     )
-    # 1 initial assignment (`let stopPolling = startPolling()`) + 9 button
-    # handlers (add-clip-upload/import-frames/extract/align/cancel-align/
-    # recommend/train/cancel-train/export) each reassigning it after apiPost.
-    assert content.count("stopPolling = startPolling()") == 10
+    # 1 initial assignment (`let stopPolling = startPolling()`) + 10 button
+    # handlers (add-clip-upload/import-frames/extract/cancel-extract/align/
+    # cancel-align/recommend/train/cancel-train/export) each reassigning it
+    # after apiPost.
+    assert content.count("stopPolling = startPolling()") == 11
 
 
 def test_job_page_contains_story_slides_for_every_stage(client):

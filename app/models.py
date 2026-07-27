@@ -17,6 +17,7 @@ class Job:
     splat_path: str | None = None
     export_path: str | None = None
     export_format: str | None = None
+    device_type: str = "standard"
 
 
 @dataclass

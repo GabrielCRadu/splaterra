@@ -4,10 +4,12 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
+from app import process_registry
 from app.ingestion import list_raw_videos
 from app.job_store import JobStore
 from app.paths import frames_dir, raw_dir
-from app.sharp_frames import ExtractionResult, run_extraction
+from app.sharp_frames import run_extraction
+from app.three_sixty_extractor import run_360_extraction
 
 # Matches app/api/frames.py's _IMAGE_SUFFIXES - kept as a separate constant since
 # extraction.py is a service module and shouldn't import from the API layer.
@@ -29,6 +31,8 @@ def extract_frames(
     selection_method: str = "best-n",
     num_frames: int = 300,
     fps: int = 10,
+    interval_seconds: float = 1.0,
+    ai_mask: bool = False,
 ) -> int:
     job = store.get_job(job_id)
     if job is None:
@@ -53,26 +57,53 @@ def extract_frames(
     def report_log(text: str) -> None:
         store.upsert_stage(job_id, "frame_extraction", "running", log=text)
 
+    def register_process(process) -> None:
+        process_registry.register(job_id, "frame_extraction", process)
+
     # 2+ real video files on disk means a multi-clip job: sharp-frames auto-detects
     # a directory input and processes every video, combining frame candidates from
     # all of them (see app/sharp_frames.py). 0 or 1 real file (including tests that
     # set raw_video_path without creating a real file) keeps the original behavior.
+    # Multi-clip isn't supported for 360 jobs yet (run_360_extraction takes a single
+    # video) - device_type != "standard" always uses job.raw_video_path directly.
     videos = list_raw_videos(job_id)
-    input_path = raw_dir(job_id) if len(videos) > 1 else Path(job.raw_video_path)
+    is_360 = job.device_type != "standard"
+    input_path = (
+        raw_dir(job_id) if len(videos) > 1 and not is_360 else Path(job.raw_video_path)
+    )
 
     try:
-        result: ExtractionResult = run_extraction(
-            input_path,
-            output_dir,
-            selection_method=selection_method,
-            num_frames=num_frames,
-            fps=fps,
-            on_progress=report_progress,
-            on_log=report_log,
-        )
+        if is_360:
+            result = run_360_extraction(
+                input_path,
+                output_dir,
+                interval_seconds=interval_seconds,
+                ai_mask=ai_mask,
+                on_progress=report_progress,
+                on_log=report_log,
+                on_process_start=register_process,
+            )
+        else:
+            result = run_extraction(
+                input_path,
+                output_dir,
+                selection_method=selection_method,
+                num_frames=num_frames,
+                fps=fps,
+                on_progress=report_progress,
+                on_log=report_log,
+                on_process_start=register_process,
+            )
     except Exception as exc:
-        store.upsert_stage(job_id, "frame_extraction", "failed", finished_at=_now(), error=str(exc))
-        raise ExtractionError(str(exc)) from exc
+        message = (
+            "Extragere anulata de utilizator"
+            if process_registry.was_cancelled(job_id, "frame_extraction")
+            else str(exc)
+        )
+        store.upsert_stage(job_id, "frame_extraction", "failed", finished_at=_now(), error=message)
+        raise ExtractionError(message) from exc
+    finally:
+        process_registry.unregister(job_id, "frame_extraction")
 
     store.update_job(job_id, frames_dir=str(output_dir), frame_count=len(result.frames))
     store.upsert_stage(job_id, "frame_extraction", "done", finished_at=_now(), log=result.log)

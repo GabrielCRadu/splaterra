@@ -4,6 +4,13 @@ def test_create_and_get_job(job_store):
     assert fetched is not None
     assert fetched.name == "Curte interioara"
     assert fetched.raw_video_path is None
+    assert fetched.device_type == "standard"
+
+
+def test_create_job_with_device_type(job_store):
+    job = job_store.create_job("Zbor drona", device_type="dji_avata_360")
+    fetched = job_store.get_job(job.id)
+    assert fetched.device_type == "dji_avata_360"
 
 
 def test_list_jobs_returns_newest_first(job_store):

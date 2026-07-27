@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from app import process_registry
 from app.deps import get_job_store, run_with_new_store
 from app.extraction import extract_frames, import_local_frames
 from app.job_store import JobStore
@@ -23,6 +24,11 @@ class ExtractFramesRequest(BaseModel):
     selection_method: str = "best-n"
     num_frames: int = 300
     fps: int = 10
+    # Used only for 360 jobs (job.device_type != "standard") - ignored by the
+    # sharp-frames path, same as selection_method/num_frames/fps are ignored
+    # by the 360 path. See app/extraction.py's device_type branch.
+    interval_seconds: float = 1.0
+    ai_mask: bool = False
 
 
 class ImportFramesRequest(BaseModel):
@@ -38,6 +44,12 @@ def extract_frames_endpoint(
 ) -> dict[str, str]:
     if store.get_job(job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
+    stage = store.get_stage(job_id, "frame_extraction")
+    if stage is not None and stage.status == "running":
+        # See train_endpoint's identical guard in app/api/training.py for why:
+        # process_registry only tracks one subprocess per (job_id, stage), so
+        # a second concurrent run silently orphans the first from cancellation.
+        raise HTTPException(status_code=409, detail="Frame extraction is already running for this job")
     background_tasks.add_task(
         run_with_new_store,
         extract_frames,
@@ -45,8 +57,19 @@ def extract_frames_endpoint(
         selection_method=body.selection_method,
         num_frames=body.num_frames,
         fps=body.fps,
+        interval_seconds=body.interval_seconds,
+        ai_mask=body.ai_mask,
     )
     return {"status": "started"}
+
+
+@router.post("/{job_id}/extract-frames/cancel")
+def cancel_extract_frames_endpoint(
+    job_id: str, store: JobStore = Depends(get_job_store)
+) -> dict[str, bool]:
+    if store.get_job(job_id) is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"cancelled": process_registry.cancel(job_id, "frame_extraction")}
 
 
 @router.post("/{job_id}/import-frames", status_code=202)

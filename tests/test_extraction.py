@@ -3,8 +3,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app import extraction
+from app import extraction, process_registry
 from app.sharp_frames import ExtractionResult, SharpFramesError
+from app.three_sixty_extractor import ThreeSixtyExtractionResult
 
 
 def test_extract_frames_updates_job_and_stage(job_store, monkeypatch):
@@ -90,7 +91,7 @@ def test_extract_frames_uses_raw_dir_when_multiple_clips_ingested(job_store, mon
 
     captured = {}
 
-    def fake_run_extraction(input_path, output_dir, *, selection_method, num_frames, fps, on_progress, on_log=None):
+    def fake_run_extraction(input_path, output_dir, *, selection_method, num_frames, fps, on_progress, on_log=None, on_process_start=None):
         captured["input_path"] = input_path
         return ExtractionResult(frames=[Path("f1.jpg")], log="ok")
 
@@ -105,7 +106,7 @@ def test_extract_frames_forwards_progress_to_job_store(job_store, tmp_path, monk
     job = job_store.create_job("Test")
     job_store.update_job(job.id, raw_video_path=str(tmp_path / "video.mp4"))
 
-    def fake_run_extraction(video_path, output_dir, *, selection_method, num_frames, fps, on_progress, on_log=None):
+    def fake_run_extraction(video_path, output_dir, *, selection_method, num_frames, fps, on_progress, on_log=None, on_process_start=None):
         on_progress(25.0)
         on_progress(75.0)
         return ExtractionResult(frames=[Path("f1.jpg")], log="ok")
@@ -134,7 +135,7 @@ def test_extract_frames_forwards_log_to_job_store(job_store, tmp_path, monkeypat
 
     monkeypatch.setattr(job_store, "upsert_stage", spy_upsert_stage)
 
-    def fake_run_extraction(video_path, output_dir, *, selection_method, num_frames, fps, on_progress, on_log=None):
+    def fake_run_extraction(video_path, output_dir, *, selection_method, num_frames, fps, on_progress, on_log=None, on_process_start=None):
         on_log("partial output so far")
         return ExtractionResult(frames=[Path("f1.jpg")], log="final log")
 
@@ -193,3 +194,89 @@ def test_import_local_frames_empty_directory_records_failed_stage(job_store, tmp
 
     stage = job_store.get_stage(job.id, "frame_extraction")
     assert stage.status == "failed"
+
+
+def test_extract_frames_uses_sharp_frames_for_standard_device(job_store, monkeypatch):
+    job = job_store.create_job("Test")
+    job_store.update_job(job.id, raw_video_path="/data/raw/video.mp4")
+
+    run_extraction_mock = MagicMock(
+        return_value=ExtractionResult(frames=[Path("f1.jpg")], log="ok")
+    )
+    run_360_mock = MagicMock()
+    monkeypatch.setattr(extraction, "run_extraction", run_extraction_mock)
+    monkeypatch.setattr(extraction, "run_360_extraction", run_360_mock)
+
+    extraction.extract_frames(job_store, job.id)
+
+    run_extraction_mock.assert_called_once()
+    run_360_mock.assert_not_called()
+
+
+def test_extract_frames_uses_360_extractor_for_360_device(job_store, monkeypatch):
+    job = job_store.create_job("Test", device_type="dji_avata_360")
+    job_store.update_job(job.id, raw_video_path="/data/raw/video.mp4")
+
+    run_extraction_mock = MagicMock()
+    run_360_mock = MagicMock(
+        return_value=ThreeSixtyExtractionResult(frames=[Path("f1.jpg"), Path("f2.jpg")], log="ok")
+    )
+    monkeypatch.setattr(extraction, "run_extraction", run_extraction_mock)
+    monkeypatch.setattr(extraction, "run_360_extraction", run_360_mock)
+
+    count = extraction.extract_frames(job_store, job.id, interval_seconds=2.0, ai_mask=True)
+
+    run_extraction_mock.assert_not_called()
+    run_360_mock.assert_called_once()
+    assert run_360_mock.call_args.kwargs["interval_seconds"] == 2.0
+    assert run_360_mock.call_args.kwargs["ai_mask"] is True
+    assert count == 2
+
+    stage = job_store.get_stage(job.id, "frame_extraction")
+    assert stage.status == "done"
+
+
+def test_extract_frames_360_device_ignores_multi_clip_raw_dir(job_store, monkeypatch, tmp_path):
+    # run_360_extraction doesn't support a directory of multiple clips (Phase
+    # 1 limitation) - a 360 job must always pass the single raw_video_path,
+    # even if list_raw_videos() would otherwise report multiple files.
+    from app.paths import raw_dir
+
+    job = job_store.create_job("Test", device_type="dji_avata_360")
+    directory = raw_dir(job.id)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "a_clip.mp4").write_bytes(b"fake")
+    (directory / "b_clip.mp4").write_bytes(b"fake")
+    job_store.update_job(job.id, raw_video_path=str(directory / "a_clip.mp4"))
+
+    run_360_mock = MagicMock(
+        return_value=ThreeSixtyExtractionResult(frames=[Path("f1.jpg")], log="ok")
+    )
+    monkeypatch.setattr(extraction, "run_360_extraction", run_360_mock)
+
+    extraction.extract_frames(job_store, job.id)
+
+    assert run_360_mock.call_args.args[0] == directory / "a_clip.mp4"
+
+
+def test_extract_frames_reports_friendly_message_when_cancelled(job_store, tmp_path, monkeypatch):
+    job = job_store.create_job("Test")
+    job_store.update_job(job.id, raw_video_path=str(tmp_path / "video.mp4"))
+
+    def fake_run_extraction(input_path, output_dir, *, selection_method, num_frames, fps, on_progress, on_log=None, on_process_start=None):
+        fake_process = MagicMock()
+        fake_process.poll.return_value = None
+        on_process_start(fake_process)
+        process_registry.cancel(job.id, "frame_extraction")
+        raise SharpFramesError("sharp-frames exited with -9")
+
+    monkeypatch.setattr(extraction, "run_extraction", fake_run_extraction)
+
+    with pytest.raises(extraction.ExtractionError, match="anulata de utilizator"):
+        extraction.extract_frames(job_store, job.id)
+
+    stage = job_store.get_stage(job.id, "frame_extraction")
+    assert stage.status == "failed"
+    assert stage.error == "Extragere anulata de utilizator"
+    # registry entry must be cleaned up regardless of outcome
+    assert process_registry.cancel(job.id, "frame_extraction") is False

@@ -51,3 +51,15 @@ Backlog de idei, in orice ordine. Adaugat de owner, de rezolvat de Claude in ses
       output-ul acumulat, throttled la ~1/s. `run_alignment` a necesitat portarea la acelasi model
       cu thread de citire pe care il foloseau deja extragerea si training-ul (citea stdout blocant
       abia dupa ce procesul se termina). Facut in `24a03af`.
+- [ ] **Faza 2 pentru importul 360 (DJI Osmo 360 / Avata 360)** — ce a ramas explicit in afara
+      Fazei 1 (vezi planul din sesiunea respectiva pentru context complet):
+      - Detectarea/respingerea fisierelor `.OSV` brute incarcate din greseala (Faza 1 se bazeaza
+        doar pe hint text in UI + disciplina owner-ului).
+      - Suport multi-clip pentru job-uri 360 (`run_360_extraction` accepta un singur fisier video;
+        logica multi-clip existenta e specifica sharp-frames).
+      - Expunerea flag-urilor `--camera-count`/`--layout`/`--resolution` in UI — raman constante
+        fixe (`cube`/6/fara resolution) in `app/three_sixty_extractor.py` pana exista date reale de
+        calibrare dintr-o rulare reala.
+      - `--nadir-mask`/`--adaptive`/`--export-telemetry`/etc. — neevaluate, nefolosite inca.
+      - Recalibrarea `timeout_seconds=3600` din `run_360_extraction` — presupunere conservatoare,
+        nicio rulare reala inca in spate.

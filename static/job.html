@@ -19,6 +19,10 @@
     <div class="story-slide" data-stage="ingestion">
       <div class="story-slide-title">Ingestie</div>
       <div class="story-slide-status" id="slide-status-ingestion"></div>
+      <p class="subtitle" id="ingestion-360-hint" style="display:none; margin:0 0 12px;">
+        Clipul trebuie stitch-uit deja in DJI Studio (export echirectangular) inainte sa il
+        incarci aici — aplicatia nu proceseaza fisiere .OSV brute.
+      </p>
       <div class="job-meta" style="margin-bottom:8px;">Clipuri video ingerate</div>
       <div id="raw-videos-list"></div>
       <div class="job-meta" style="margin:12px 0 8px;">Adauga clip</div>
@@ -32,29 +36,40 @@
     <div class="story-slide" data-stage="frame_extraction">
       <div class="story-slide-title">Extragere cadre</div>
       <div class="story-slide-status" id="slide-status-frame_extraction"></div>
-      <p class="subtitle" id="video-info-hint" style="margin:0 0 12px;"></p>
-      <label class="settings-label" for="extract-fps">Cadre pe secunda esantionate (fps)</label>
-      <input type="text" inputmode="numeric" id="extract-fps" />
-      <label class="settings-label" for="extract-method">Metoda de selectie</label>
-      <select id="extract-method">
-        <option value="best-n">Cele mai clare (best-n)</option>
-        <option value="percent">Procent din cadre (cele mai clare, distribuite uniform)</option>
-        <option value="batched">Pe loturi (batched)</option>
-        <option value="outlier-removal">Elimina cadre neclare (outlier-removal)</option>
-      </select>
-      <div id="extract-num-frames-row">
-        <label class="settings-label" for="extract-num-frames">Numar cadre finale (cele mai clare)</label>
-        <input type="text" inputmode="numeric" id="extract-num-frames" />
+      <div id="extract-standard-settings">
+        <p class="subtitle" id="video-info-hint" style="margin:0 0 12px;"></p>
+        <label class="settings-label" for="extract-fps">Cadre pe secunda esantionate (fps)</label>
+        <input type="text" inputmode="numeric" id="extract-fps" />
+        <label class="settings-label" for="extract-method">Metoda de selectie</label>
+        <select id="extract-method">
+          <option value="best-n">Cele mai clare (best-n)</option>
+          <option value="percent">Procent din cadre (cele mai clare, distribuite uniform)</option>
+          <option value="batched">Pe loturi (batched)</option>
+          <option value="outlier-removal">Elimina cadre neclare (outlier-removal)</option>
+        </select>
+        <div id="extract-num-frames-row">
+          <label class="settings-label" for="extract-num-frames">Numar cadre finale (cele mai clare)</label>
+          <input type="text" inputmode="numeric" id="extract-num-frames" />
+        </div>
+        <div id="extract-percent-row" style="display:none;">
+          <label class="settings-label" for="extract-percent">Procent din cadrele esantionate</label>
+          <input type="text" inputmode="numeric" id="extract-percent" value="50" />
+        </div>
+        <p class="subtitle" id="extract-settings-hint" style="margin:8px 0 12px;"></p>
+        <p class="subtitle" id="recommend-status" style="margin:0 0 8px;"></p>
+        <a class="btn-ghost" id="link-recommendation" style="display:none;">Vezi recomandarea</a>
+        <button class="btn-ghost" id="btn-recommend" style="display:none;">Calculeaza recomandare</button>
       </div>
-      <div id="extract-percent-row" style="display:none;">
-        <label class="settings-label" for="extract-percent">Procent din cadrele esantionate</label>
-        <input type="text" inputmode="numeric" id="extract-percent" value="50" />
+      <div id="extract-360-settings" style="display:none;">
+        <label class="settings-label" for="extract-360-interval">Interval intre cadre (secunde)</label>
+        <input type="text" inputmode="numeric" id="extract-360-interval" value="1.0" />
+        <label class="checkbox-row" for="extract-360-ai-mask" style="margin-bottom:12px;">
+          <input type="checkbox" id="extract-360-ai-mask" />
+          Elimina operatorul/subiectii nedoriti din cadru (AI)
+        </label>
       </div>
-      <p class="subtitle" id="extract-settings-hint" style="margin:8px 0 12px;"></p>
-      <p class="subtitle" id="recommend-status" style="margin:0 0 8px;"></p>
-      <a class="btn-ghost" id="link-recommendation" style="display:none;">Vezi recomandarea</a>
-      <button class="btn-ghost" id="btn-recommend" style="display:none;">Calculeaza recomandare</button>
       <button class="btn" id="btn-extract" style="display:none; margin-top:10px;">Extrage cadre</button>
+      <button class="btn-danger" id="btn-cancel-extract" style="display:none; margin-top:10px;" type="button">Opreste extragerea</button>
       <div id="import-frames-panel" style="display:none; margin-top:12px;">
         <div class="job-meta" style="margin-bottom:8px;">Ai deja cadre extrase?</div>
         <input type="text" id="import-frames-path" placeholder="Cale folder (ex. C:\Poze\cadre)" />
@@ -128,6 +143,7 @@
   let initializedView = false;
   let userNavigated = false;
   let videoDurationSeconds = null;
+  let deviceType = "standard";
   const lastStatusByStage = {};
   const expandedLogs = new Set();
 
@@ -326,6 +342,7 @@
   function updateActions(stages) {
     const ingestionDone = stageStatus(stages, "ingestion") === "done";
     const extractionDone = stageStatus(stages, "frame_extraction") === "done";
+    const extractionRunning = stageStatus(stages, "frame_extraction") === "running";
     const alignmentDone = stageStatus(stages, "alignment") === "done";
     const alignmentRunning = stageStatus(stages, "alignment") === "running";
     const recommendationDone = stageStatus(stages, "recommendation") === "done";
@@ -333,7 +350,8 @@
     const trainingRunning = stageStatus(stages, "training") === "running";
 
     document.getElementById("btn-extract").style.display =
-      ingestionDone && !extractionDone ? "block" : "none";
+      ingestionDone && !extractionDone && !extractionRunning ? "block" : "none";
+    document.getElementById("btn-cancel-extract").style.display = extractionRunning ? "block" : "none";
     document.getElementById("btn-ingestion-continue").style.display =
       ingestionDone && !extractionDone ? "block" : "none";
     document.getElementById("import-frames-panel").style.display = !extractionDone ? "block" : "none";
@@ -350,8 +368,11 @@
     alignmentLink.style.display = alignmentDone ? "block" : "none";
     alignmentLink.href = `/alignment.html?id=${jobId}`;
 
+    // Recomandarea (fps/num_frames/selection_method) nu are echivalent pentru
+    // extragerea pe interval fix a lui 360Extractor - ascunsa complet pentru
+    // job-uri 360, nu doar dezactivata.
     document.getElementById("btn-recommend").style.display =
-      ingestionDone && !recommendationDone ? "block" : "none";
+      deviceType === "standard" && ingestionDone && !recommendationDone ? "block" : "none";
 
     const recommendationLink = document.getElementById("link-recommendation");
     recommendationLink.style.display = recommendationDone ? "block" : "none";
@@ -392,10 +413,19 @@
     applyTrackTransform();
   }
 
+  function updateDeviceFieldVisibility() {
+    const is360 = deviceType !== "standard";
+    document.getElementById("ingestion-360-hint").style.display = is360 ? "block" : "none";
+    document.getElementById("extract-standard-settings").style.display = is360 ? "none" : "block";
+    document.getElementById("extract-360-settings").style.display = is360 ? "block" : "none";
+  }
+
   async function refresh() {
     const job = await apiGet(`/jobs/${jobId}`);
     document.getElementById("job-name").textContent = job.name;
     document.getElementById("job-meta").textContent = new Date(job.created_at).toLocaleString("ro-RO");
+    deviceType = job.device_type;
+    updateDeviceFieldVisibility();
 
     const stages = await apiGet(`/jobs/${jobId}/stages`);
     applyStages(stages);
@@ -538,11 +568,24 @@
       selectionMethod = "best-n";
     }
 
+    const intervalSeconds = parseFloat(document.getElementById("extract-360-interval").value) || 1.0;
+    const aiMask = document.getElementById("extract-360-ai-mask").checked;
+
     await apiPost(`/jobs/${jobId}/extract-frames`, {
       fps: fps,
       num_frames: numFrames,
       selection_method: selectionMethod,
+      interval_seconds: intervalSeconds,
+      ai_mask: aiMask,
     });
+    refresh();
+    stopPolling();
+    stopPolling = startPolling();
+  });
+
+  document.getElementById("btn-cancel-extract").addEventListener("click", async () => {
+    if (!confirm("Sigur vrei sa opresti extragerea cadrelor? Progresul curent se pierde.")) return;
+    await apiPost(`/jobs/${jobId}/extract-frames/cancel`, {});
     refresh();
     stopPolling();
     stopPolling = startPolling();

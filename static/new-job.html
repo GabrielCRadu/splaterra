@@ -12,18 +12,36 @@
 
 <div class="card">
   <input type="text" id="job-name" placeholder="Nume job (ex. Curte interioara)" />
+  <label class="settings-label" for="device-type">Dispozitiv</label>
+  <select id="device-type">
+    <option value="standard">Video normal</option>
+    <option value="dji_osmo_360">DJI Osmo 360</option>
+    <option value="dji_avata_360">DJI Avata 360</option>
+  </select>
+  <p class="subtitle" id="device-360-hint" style="display:none; margin:0 0 12px;">
+    Clipul trebuie stitch-uit deja in DJI Studio (export echirectangular) inainte sa il incarci
+    aici — aplicatia nu proceseaza fisiere .OSV brute.
+  </p>
   <button class="btn" id="btn-create">Creeaza job</button>
 </div>
 
 <script src="/js/app.js"></script>
 <script>
+  initCustomSelect(document.getElementById("device-type"));
+
+  document.getElementById("device-type").addEventListener("change", (event) => {
+    document.getElementById("device-360-hint").style.display =
+      event.target.value === "standard" ? "none" : "block";
+  });
+
   document.getElementById("btn-create").addEventListener("click", async () => {
     const name = document.getElementById("job-name").value.trim();
     if (!name) {
       alert("Introdu un nume pentru job.");
       return;
     }
-    const job = await apiPost("/jobs", { name });
+    const deviceType = document.getElementById("device-type").value;
+    const job = await apiPost("/jobs", { name, device_type: deviceType });
     window.location.href = `/job.html?id=${job.id}`;
   });
 </script>

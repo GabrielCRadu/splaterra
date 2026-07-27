@@ -47,9 +47,14 @@ def test_connect_migrates_old_schema_without_losing_data(tmp_path):
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)")}
     assert "export_path" in columns
     assert "export_format" in columns
+    assert "device_type" in columns
 
     row = conn.execute("SELECT * FROM jobs WHERE id = ?", ("job-1",)).fetchone()
     assert row["name"] == "MasinaPoarta"
     assert row["splat_path"] == "training/splat_30000.ply"
     assert row["export_path"] is None
+    # device_type is NOT NULL with a real default, unlike export_path/
+    # export_format above where NULL is the legitimate "not done yet" value -
+    # a pre-existing job must backfill to "standard", not None.
+    assert row["device_type"] == "standard"
     conn.close()
