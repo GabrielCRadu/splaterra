@@ -51,6 +51,13 @@ Backlog de idei, in orice ordine. Adaugat de owner, de rezolvat de Claude in ses
       output-ul acumulat, throttled la ~1/s. `run_alignment` a necesitat portarea la acelasi model
       cu thread de citire pe care il foloseau deja extragerea si training-ul (citea stdout blocant
       abia dupa ce procesul se termina). Facut in `24a03af`.
+- [x] **Import 360 (DJI Osmo 360 / DJI Avata 360), Faza 1** — video deja stitch-uit echirectangular
+      (in DJI Studio, in afara aplicatiei; `.OSV` brut nu e suportat). Selector de dispozitiv per
+      job la creare (`static/new-job.html`), wrapper nou `app/three_sixty_extractor.py` peste
+      https://github.com/nicolasdiolez/360Extractor (reproiectie echirectangular -> pinhole + AI
+      masking optional), care inlocuieste `sharp-frames` in cadrul aceleiasi etape
+      `frame_extraction` (nu o etapa noua) — restul pipeline-ului (alignment/training/export) nu
+      stie si nu trebuie sa stie cum au aparut cadrele. Facut in `32db26f`.
 - [ ] **Faza 2 pentru importul 360 (DJI Osmo 360 / Avata 360)** — ce a ramas explicit in afara
       Fazei 1 (vezi planul din sesiunea respectiva pentru context complet):
       - Detectarea/respingerea fisierelor `.OSV` brute incarcate din greseala (Faza 1 se bazeaza
