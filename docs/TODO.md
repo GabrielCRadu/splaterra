@@ -43,3 +43,5 @@ Backlog de idei, in orice ordine. Adaugat de owner, de rezolvat de Claude in ses
       `6b76428`.
 - [ ] ETA (timp estimat ramas) pentru alignment si training, afisat langa bara de progres cat timp
       stage-ul ruleaza.
+- [ ] Output CLI in timp real (nu doar dupa ce stage-ul se termina), ascuns dupa acelasi buton
+      "advanced view" existent — momentan `job_stages.log` se populeaza abia la final.
