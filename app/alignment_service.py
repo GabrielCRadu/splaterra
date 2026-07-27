@@ -29,6 +29,37 @@ def _alignment_timeout(frame_count: int | None) -> int:
     return max(ALIGNMENT_BASE_TIMEOUT_SECONDS, frame_count * ALIGNMENT_SECONDS_PER_FRAME)
 
 
+# RealityScan can exit 0 and write valid (if nearly empty) COLMAP files even
+# when it only registered a tiny fraction of the input frames - e.g. a real
+# job with 1666 extracted frames came back with just 2 registered images
+# (insufficient overlap/features in the footage). alignment_service's
+# existing "do the expected files exist" check passed fine, so the job sailed
+# through to training, which crashed 5 seconds in on the degenerate 2-camera/
+# 42-point reconstruction with a cryptic CUDA error. Catch it here instead,
+# with a message that actually points at the real problem.
+MIN_REGISTERED_IMAGES = 10
+MIN_REGISTRATION_RATIO = 0.2
+
+
+def _registration_coverage_error(images_dir: Path, frame_count: int | None) -> str | None:
+    registered = sum(1 for _ in images_dir.iterdir())
+    too_few_absolute = registered < MIN_REGISTERED_IMAGES
+    too_few_relative = bool(frame_count) and registered / frame_count < MIN_REGISTRATION_RATIO
+    if not (too_few_absolute or too_few_relative):
+        return None
+    if frame_count:
+        percent = round(registered / frame_count * 100)
+        return (
+            f"Alignment a inregistrat doar {registered} din {frame_count} cadre ({percent}%) - "
+            "prea putine pentru o reconstructie utila. Verifica daca footage-ul are suficient "
+            "overlap intre cadre."
+        )
+    return (
+        f"Alignment a inregistrat doar {registered} cadre - prea putine pentru o "
+        "reconstructie utila. Verifica daca footage-ul are suficient overlap intre cadre."
+    )
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -76,6 +107,11 @@ def compute_alignment(store: JobStore, job_id: str) -> AlignmentResult:
         raise AlignmentError(message) from exc
     finally:
         process_registry.unregister(job_id, "alignment")
+
+    coverage_error = _registration_coverage_error(result.images_dir, job.frame_count)
+    if coverage_error is not None:
+        store.upsert_stage(job_id, "alignment", "failed", finished_at=_now(), error=coverage_error)
+        raise AlignmentError(coverage_error)
 
     store.update_job(
         job_id,

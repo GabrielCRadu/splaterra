@@ -6,10 +6,17 @@ from app import alignment_service, process_registry
 from app.realityscan import AlignmentResult, RealityScanError
 
 
+def _write_fake_registered_images(images_dir, count=10):
+    images_dir.mkdir(parents=True, exist_ok=True)
+    for i in range(count):
+        (images_dir / f"{i:05d}.png").write_bytes(b"fake")
+
+
 def test_compute_alignment_updates_job_and_stage(job_store, tmp_path, monkeypatch):
     job = job_store.create_job("Test")
     job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"))
 
+    _write_fake_registered_images(tmp_path / "images")
     fake_result = AlignmentResult(
         sparse_dir=tmp_path / "sparse" / "0",
         images_dir=tmp_path / "images",
@@ -112,6 +119,7 @@ def test_compute_alignment_forwards_progress_to_job_store(job_store, tmp_path, m
     ):
         on_progress(40.0)
         on_progress(95.0)
+        _write_fake_registered_images(tmp_path / "images")
         return AlignmentResult(
             sparse_dir=tmp_path / "sparse" / "0",
             images_dir=tmp_path / "images",
@@ -146,6 +154,7 @@ def test_compute_alignment_forwards_log_to_job_store(job_store, tmp_path, monkey
         frames_dir, output_dir, *, progress_path, on_progress, timeout_seconds, on_process_start=None, on_log=None
     ):
         on_log("partial output so far")
+        _write_fake_registered_images(tmp_path / "images")
         return AlignmentResult(
             sparse_dir=tmp_path / "sparse" / "0", images_dir=tmp_path / "images", log="final log"
         )
@@ -161,6 +170,7 @@ def test_compute_alignment_scales_timeout_with_frame_count(job_store, tmp_path, 
     job = job_store.create_job("Test")
     job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"), frame_count=1000)
 
+    _write_fake_registered_images(tmp_path / "images", count=1000)
     fake_result = AlignmentResult(
         sparse_dir=tmp_path / "sparse" / "0", images_dir=tmp_path / "images", log="ok"
     )
@@ -176,6 +186,7 @@ def test_compute_alignment_uses_base_timeout_when_frame_count_unknown(job_store,
     job = job_store.create_job("Test")
     job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"))
 
+    _write_fake_registered_images(tmp_path / "images")
     fake_result = AlignmentResult(
         sparse_dir=tmp_path / "sparse" / "0", images_dir=tmp_path / "images", log="ok"
     )
@@ -185,3 +196,67 @@ def test_compute_alignment_uses_base_timeout_when_frame_count_unknown(job_store,
     alignment_service.compute_alignment(job_store, job.id)
 
     assert mock_run.call_args.kwargs["timeout_seconds"] == alignment_service.ALIGNMENT_BASE_TIMEOUT_SECONDS
+
+
+def test_compute_alignment_fails_on_near_empty_registration(job_store, tmp_path, monkeypatch):
+    # Real crash this guards against: RealityScan exited 0 and wrote valid
+    # COLMAP files while registering only 2 of 1666 extracted frames
+    # (insufficient overlap in the footage) - the job sailed through to
+    # training, which then crashed on the degenerate 2-camera reconstruction
+    # with a cryptic CUDA error instead of a message pointing at the real
+    # problem.
+    job = job_store.create_job("Test")
+    job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"), frame_count=1666)
+
+    _write_fake_registered_images(tmp_path / "images", count=2)
+    fake_result = AlignmentResult(
+        sparse_dir=tmp_path / "sparse" / "0", images_dir=tmp_path / "images", log="ok"
+    )
+    monkeypatch.setattr(alignment_service, "run_alignment", MagicMock(return_value=fake_result))
+
+    with pytest.raises(alignment_service.AlignmentError, match="2 din 1666"):
+        alignment_service.compute_alignment(job_store, job.id)
+
+    stage = job_store.get_stage(job.id, "alignment")
+    assert stage.status == "failed"
+    assert "2 din 1666" in stage.error
+    # A failed coverage check must not leave stale colmap paths on the job.
+    fetched = job_store.get_job(job.id)
+    assert fetched.colmap_sparse_dir is None
+
+
+def test_compute_alignment_fails_below_absolute_minimum_even_without_frame_count(job_store, tmp_path, monkeypatch):
+    job = job_store.create_job("Test")
+    job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"))
+
+    _write_fake_registered_images(tmp_path / "images", count=3)
+    fake_result = AlignmentResult(
+        sparse_dir=tmp_path / "sparse" / "0", images_dir=tmp_path / "images", log="ok"
+    )
+    monkeypatch.setattr(alignment_service, "run_alignment", MagicMock(return_value=fake_result))
+
+    with pytest.raises(alignment_service.AlignmentError, match="doar 3 cadre"):
+        alignment_service.compute_alignment(job_store, job.id)
+
+    stage = job_store.get_stage(job.id, "alignment")
+    assert stage.status == "failed"
+
+
+def test_compute_alignment_allows_partial_but_reasonable_registration(job_store, tmp_path, monkeypatch):
+    # Some drop-off between extracted and registered frames is normal
+    # (blurry/duplicate/no-overlap frames legitimately fail to register even
+    # in a healthy reconstruction) - only catastrophic coverage should fail.
+    job = job_store.create_job("Test")
+    job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"), frame_count=100)
+
+    _write_fake_registered_images(tmp_path / "images", count=60)
+    fake_result = AlignmentResult(
+        sparse_dir=tmp_path / "sparse" / "0", images_dir=tmp_path / "images", log="ok"
+    )
+    monkeypatch.setattr(alignment_service, "run_alignment", MagicMock(return_value=fake_result))
+
+    result = alignment_service.compute_alignment(job_store, job.id)
+
+    assert result is fake_result
+    stage = job_store.get_stage(job.id, "alignment")
+    assert stage.status == "done"
