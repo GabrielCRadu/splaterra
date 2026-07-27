@@ -119,6 +119,9 @@ def compute_training(
             # Best-effort diagnostic sampling must never break a real training run.
             logger.exception("Failed to sample hardware usage during training (non-fatal)")
 
+    def report_log(text: str) -> None:
+        store.upsert_stage(job_id, "training", "running", log=text)
+
     try:
         result = run_training(
             data_path,
@@ -127,6 +130,7 @@ def compute_training(
             bilateral_grid=variable_exposure,
             resize_factor=resize_factor,
             on_progress=report_progress,
+            on_log=report_log,
             on_process_start=lambda p: process_registry.register(job_id, "training", p),
         )
     except Exception as exc:

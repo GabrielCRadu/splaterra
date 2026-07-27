@@ -62,6 +62,7 @@ def run_extraction(
     num_frames: int = 300,
     fps: int = 10,
     on_progress: Callable[[float], None] | None = None,
+    on_log: Callable[[str], None] | None = None,
     timeout_seconds: int = 1800,
 ) -> ExtractionResult:
     # input_path may be a single video file or a directory containing
@@ -95,6 +96,7 @@ def run_extraction(
 
     log_lines: list[str] = []
     deadline = time.monotonic() + timeout_seconds
+    last_log_update = time.monotonic()
     while True:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
@@ -113,6 +115,11 @@ def run_extraction(
         match = _PERCENT_RE.search(item)
         if match and on_progress is not None:
             on_progress(float(match.group(1)))
+        # Throttled to ~1/s (matches the poll cadence elsewhere) so verbose
+        # CLI output doesn't turn into a SQLite write per line.
+        if on_log is not None and time.monotonic() - last_log_update >= 1.0:
+            on_log("\n".join(log_lines))
+            last_log_update = time.monotonic()
 
     returncode = process.wait()
     log = "\n".join(log_lines)

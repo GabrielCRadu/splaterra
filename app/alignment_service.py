@@ -53,6 +53,9 @@ def compute_alignment(store: JobStore, job_id: str) -> AlignmentResult:
     def report_progress(percent: float) -> None:
         store.upsert_stage(job_id, "alignment", "running", progress_percent=percent)
 
+    def report_log(text: str) -> None:
+        store.upsert_stage(job_id, "alignment", "running", log=text)
+
     try:
         result = run_alignment(
             Path(job.frames_dir),
@@ -61,6 +64,7 @@ def compute_alignment(store: JobStore, job_id: str) -> AlignmentResult:
             on_progress=report_progress,
             timeout_seconds=_alignment_timeout(job.frame_count),
             on_process_start=lambda p: process_registry.register(job_id, "alignment", p),
+            on_log=report_log,
         )
     except Exception as exc:
         message = (

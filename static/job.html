@@ -148,11 +148,33 @@
     return Math.min(idx, STORIES.length - 1);
   }
 
+  function formatDuration(seconds) {
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    const remMinutes = minutes % 60;
+    return `${hours}h ${remMinutes}min`;
+  }
+
+  function etaText(stage) {
+    if (!stage.started_at || !stage.progress_percent) return "";
+    const elapsedSeconds = (Date.now() - new Date(stage.started_at).getTime()) / 1000;
+    if (elapsedSeconds <= 0) return "";
+    const totalEstimatedSeconds = elapsedSeconds / (stage.progress_percent / 100);
+    const remainingSeconds = Math.max(0, totalEstimatedSeconds - elapsedSeconds);
+    return `~${formatDuration(remainingSeconds)} ramase`;
+  }
+
   function progressBarHtml(stage) {
     if (stage.status !== "running") return "";
     if (stage.progress_percent !== null && stage.progress_percent !== undefined) {
       const pct = Math.max(0, Math.min(100, stage.progress_percent));
-      return `<div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>`;
+      const eta = etaText(stage);
+      return `
+        <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <div class="progress-meta"><span>${pct.toFixed(0)}%</span>${eta ? `<span>${eta}</span>` : ""}</div>
+      `;
     }
     return `<div class="progress-track"><div class="progress-indeterminate"></div></div>`;
   }

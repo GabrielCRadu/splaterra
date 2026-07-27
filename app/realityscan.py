@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
+import queue
 import re
 import shutil
 import subprocess
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -38,6 +40,20 @@ def _realityscan_binary() -> str:
     )
 
 
+def _reader_thread(stream, output_queue: queue.Queue) -> None:
+    buffer = ""
+    for char in iter(lambda: stream.read(1), ""):
+        if char in ("\r", "\n"):
+            if buffer:
+                output_queue.put(buffer)
+                buffer = ""
+        else:
+            buffer += char
+    if buffer:
+        output_queue.put(buffer)
+    output_queue.put(None)  # sentinel: stream closed
+
+
 def _latest_progress_percent(progress_path: Path) -> float | None:
     try:
         lines = progress_path.read_text(errors="ignore").strip().splitlines()
@@ -58,6 +74,7 @@ def run_alignment(
     timeout_seconds: int = 600,
     on_progress: Callable[[float], None] | None = None,
     on_process_start: Callable[[subprocess.Popen], None] | None = None,
+    on_log: Callable[[str], None] | None = None,
 ) -> AlignmentResult:
     binary = _realityscan_binary()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -98,26 +115,49 @@ def run_alignment(
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     if on_process_start is not None:
         on_process_start(process)
+    output_queue: queue.Queue = queue.Queue()
+    reader = threading.Thread(target=_reader_thread, args=(process.stdout, output_queue), daemon=True)
+    reader.start()
+
+    log_lines: list[str] = []
     deadline = time.monotonic() + timeout_seconds
     last_reported: float | None = None
+    last_log_update = time.monotonic()
 
-    while process.poll() is None:
-        if time.monotonic() > deadline:
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
             process.kill()
             process.wait()
             raise RealityScanError(
                 f"RealityScan did not finish within {timeout_seconds}s and was terminated"
             )
+        try:
+            item = output_queue.get(timeout=min(remaining, 1.0))
+        except queue.Empty:
+            pass
+        else:
+            if item is None:
+                break
+            log_lines.append(item)
+
+        # Progress comes from a separate file RealityScan writes to
+        # (-writeProgress), not from stdout - checked every iteration
+        # (roughly once/second) regardless of whether new stdout arrived.
         if progress_path is not None and on_progress is not None and progress_path.is_file():
             percent = _latest_progress_percent(progress_path)
             if percent is not None and percent != last_reported:
                 on_progress(percent)
                 last_reported = percent
-        time.sleep(1.0)
 
-    returncode = process.returncode
-    stdout_text = process.stdout.read() if process.stdout is not None else ""
-    log = stdout_text
+        # Throttled to ~1/s so verbose CLI output doesn't turn into a SQLite
+        # write per line.
+        if on_log is not None and time.monotonic() - last_log_update >= 1.0:
+            on_log("\n".join(log_lines))
+            last_log_update = time.monotonic()
+
+    returncode = process.wait()
+    log = "\n".join(log_lines)
     if progress_path is not None and progress_path.is_file():
         log += "\n--- progress ---\n" + progress_path.read_text(errors="ignore")
 

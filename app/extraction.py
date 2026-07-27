@@ -50,6 +50,9 @@ def extract_frames(
     def report_progress(percent: float) -> None:
         store.upsert_stage(job_id, "frame_extraction", "running", progress_percent=percent)
 
+    def report_log(text: str) -> None:
+        store.upsert_stage(job_id, "frame_extraction", "running", log=text)
+
     # 2+ real video files on disk means a multi-clip job: sharp-frames auto-detects
     # a directory input and processes every video, combining frame candidates from
     # all of them (see app/sharp_frames.py). 0 or 1 real file (including tests that
@@ -65,6 +68,7 @@ def extract_frames(
             num_frames=num_frames,
             fps=fps,
             on_progress=report_progress,
+            on_log=report_log,
         )
     except Exception as exc:
         store.upsert_stage(job_id, "frame_extraction", "failed", finished_at=_now(), error=str(exc))

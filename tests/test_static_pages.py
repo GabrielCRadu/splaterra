@@ -214,12 +214,26 @@ def test_css_defines_story_bar_active_outline(client):
     assert "outline" in response.text
 
 
+def test_css_defines_progress_meta_style(client):
+    response = client.get("/css/app.css")
+    assert response.status_code == 200
+    assert ".progress-meta" in response.text
+
+
 def test_job_page_contains_progress_bar_styles_and_render_hook(client):
     response = client.get("/job.html")
     assert response.status_code == 200
     assert "progress-track" in response.text
     assert "progress-fill" in response.text
     assert "progress-indeterminate" in response.text
+
+
+def test_job_page_shows_percent_and_eta(client):
+    response = client.get("/job.html")
+    assert response.status_code == 200
+    assert "function etaText" in response.text
+    assert "function formatDuration" in response.text
+    assert "progress-meta" in response.text
 
 
 def test_job_page_contains_train_button_and_download_link(client):

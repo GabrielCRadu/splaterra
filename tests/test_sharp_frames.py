@@ -50,6 +50,36 @@ def test_run_extraction_returns_frames_on_success(tmp_path, monkeypatch):
     assert "extracted 2 frames" in result.log
 
 
+def test_run_extraction_calls_on_log_with_accumulated_output(tmp_path, monkeypatch):
+    monkeypatch.setattr(sharp_frames.shutil, "which", lambda name: "/usr/bin/sharp-frames")
+
+    output_dir = tmp_path / "out"
+
+    def fake_popen(command, stdout, stderr, text, bufsize):
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "frame_0001.jpg").write_bytes(b"fake")
+        return _fake_popen("line one\nline two", returncode=0)
+
+    monkeypatch.setattr(sharp_frames.subprocess, "Popen", fake_popen)
+
+    log_updates = []
+    # Force every iteration to count as "throttle window elapsed" so on_log
+    # fires deterministically without depending on real wall-clock timing.
+    call_count = [0]
+
+    def fake_monotonic():
+        call_count[0] += 1
+        return call_count[0] * 10.0
+
+    monkeypatch.setattr(sharp_frames.time, "monotonic", fake_monotonic)
+
+    sharp_frames.run_extraction(tmp_path / "video.mp4", output_dir, on_log=log_updates.append)
+
+    assert log_updates
+    assert "line one" in log_updates[-1]
+    assert "line two" in log_updates[-1]
+
+
 def test_run_extraction_pins_batch_flags_for_batched_method(tmp_path, monkeypatch):
     # app/recommendation.py's num_frames math assumes batch_size=5/batch_buffer=2 -
     # these must be passed explicitly, not left to sharp-frames' own CLI defaults,

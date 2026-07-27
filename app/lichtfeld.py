@@ -100,6 +100,7 @@ def run_training(
     timeout_seconds: int = 7200,
     on_progress: Callable[[float], None] | None = None,
     on_process_start: Callable[[subprocess.Popen], None] | None = None,
+    on_log: Callable[[str], None] | None = None,
 ) -> TrainingResult:
     binary = _lichtfeld_binary()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -143,6 +144,7 @@ def run_training(
     log_lines: list[str] = []
     deadline = time.monotonic() + timeout_seconds
     last_reported: float | None = None
+    last_log_update = time.monotonic()
     while True:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
@@ -163,6 +165,11 @@ def run_training(
             if percent is not None and percent != last_reported:
                 on_progress(percent)
                 last_reported = percent
+        # Throttled to ~1/s (matches the poll cadence elsewhere) so verbose
+        # CLI output doesn't turn into a SQLite write per line.
+        if on_log is not None and time.monotonic() - last_log_update >= 1.0:
+            on_log("\n".join(log_lines))
+            last_log_update = time.monotonic()
 
     returncode = process.wait()
     log = "\n".join(log_lines)

@@ -67,7 +67,7 @@ def test_compute_alignment_reports_friendly_message_when_cancelled(job_store, tm
     job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"))
 
     def fake_run_alignment(
-        frames_dir, output_dir, *, progress_path, on_progress, timeout_seconds, on_process_start
+        frames_dir, output_dir, *, progress_path, on_progress, timeout_seconds, on_process_start, on_log=None
     ):
         fake_process = MagicMock()
         fake_process.poll.return_value = None
@@ -108,7 +108,7 @@ def test_compute_alignment_forwards_progress_to_job_store(job_store, tmp_path, m
     job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"))
 
     def fake_run_alignment(
-        frames_dir, output_dir, *, progress_path, on_progress, timeout_seconds, on_process_start=None
+        frames_dir, output_dir, *, progress_path, on_progress, timeout_seconds, on_process_start=None, on_log=None
     ):
         on_progress(40.0)
         on_progress(95.0)
@@ -124,6 +124,37 @@ def test_compute_alignment_forwards_progress_to_job_store(job_store, tmp_path, m
 
     stage = job_store.get_stage(job.id, "alignment")
     assert stage.progress_percent == 95.0
+
+
+def test_compute_alignment_forwards_log_to_job_store(job_store, tmp_path, monkeypatch):
+    # Real-time visibility while the stage is still "running", not just the
+    # final log written once it finishes.
+    job = job_store.create_job("Test")
+    job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"))
+
+    seen_running_logs = []
+    real_upsert_stage = job_store.upsert_stage
+
+    def spy_upsert_stage(job_id, stage, status, **kwargs):
+        if status == "running" and kwargs.get("log") is not None:
+            seen_running_logs.append(kwargs["log"])
+        real_upsert_stage(job_id, stage, status, **kwargs)
+
+    monkeypatch.setattr(job_store, "upsert_stage", spy_upsert_stage)
+
+    def fake_run_alignment(
+        frames_dir, output_dir, *, progress_path, on_progress, timeout_seconds, on_process_start=None, on_log=None
+    ):
+        on_log("partial output so far")
+        return AlignmentResult(
+            sparse_dir=tmp_path / "sparse" / "0", images_dir=tmp_path / "images", log="final log"
+        )
+
+    monkeypatch.setattr(alignment_service, "run_alignment", fake_run_alignment)
+
+    alignment_service.compute_alignment(job_store, job.id)
+
+    assert seen_running_logs == ["partial output so far"]
 
 
 def test_compute_alignment_scales_timeout_with_frame_count(job_store, tmp_path, monkeypatch):

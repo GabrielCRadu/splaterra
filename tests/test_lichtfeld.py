@@ -53,6 +53,37 @@ def test_lichtfeld_binary_uses_splatprep_lichtfeld_dir_env_var(tmp_path, monkeyp
     assert lichtfeld._lichtfeld_binary() == str(fake_exe)
 
 
+def test_run_training_calls_on_log_with_accumulated_output(tmp_path, monkeypatch):
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+    output_dir = tmp_path / "out"
+
+    def fake_popen(command, stdout, stderr, text, bufsize):
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "result.ply").write_bytes(b"fake ply")
+        return _make_process_with_output(
+            process=_fake_popen_result(0), text="line one\nline two"
+        )
+
+    monkeypatch.setattr(lichtfeld.subprocess, "Popen", fake_popen)
+
+    log_updates = []
+    # Force every iteration to count as "throttle window elapsed" so on_log
+    # fires deterministically without depending on real wall-clock timing.
+    call_count = [0]
+
+    def fake_monotonic():
+        call_count[0] += 1
+        return call_count[0] * 10.0
+
+    monkeypatch.setattr(lichtfeld.time, "monotonic", fake_monotonic)
+
+    lichtfeld.run_training(tmp_path / "data", output_dir, on_log=log_updates.append)
+
+    assert log_updates
+    assert "line one" in log_updates[-1]
+    assert "line two" in log_updates[-1]
+
+
 def test_run_training_omits_max_cap_flag_when_not_given(tmp_path, monkeypatch):
     monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
     output_dir = tmp_path / "out"

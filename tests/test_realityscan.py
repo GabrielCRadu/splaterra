@@ -1,17 +1,32 @@
-import subprocess
+import time
 from unittest.mock import MagicMock
 
 import pytest
 
 from app import realityscan
 
+# Captured before any test can monkeypatch time.sleep - see the comment on
+# HangingStdout below (and test_lichtfeld.py's identical pattern) for why
+# this must be an early-bound reference, not a dynamic `time.sleep` lookup.
+_REAL_SLEEP = time.sleep
+
+
+class FakeStdout:
+    """Mimics a real Popen.stdout: yields chars from `text`, then '' forever (EOF)."""
+
+    def __init__(self, text: str):
+        self._chars = iter(text)
+
+    def read(self, _n):
+        try:
+            return next(self._chars)
+        except StopIteration:
+            return ""
+
 
 def _fake_process(returncode: int, stdout_text: str = "") -> MagicMock:
     process = MagicMock()
-    process.poll = MagicMock(side_effect=[None, None, returncode])
-    process.returncode = returncode
-    process.stdout = MagicMock()
-    process.stdout.read = MagicMock(return_value=stdout_text)
+    process.stdout = FakeStdout(stdout_text)
     process.kill = MagicMock()
     process.wait = MagicMock(return_value=returncode)
     return process
@@ -54,7 +69,6 @@ def test_run_alignment_uses_bundled_colmap_export_params(tmp_path, monkeypatch):
     # sparse/0/{cameras,images,points3D}.txt and images/ as siblings of the
     # given target's parent directory, regardless of the target's own name.
     monkeypatch.setattr(realityscan.shutil, "which", lambda name: "C:/fake/RealityScan.exe")
-    monkeypatch.setattr(realityscan.time, "sleep", lambda _: None)
 
     output_dir = tmp_path / "out"
     captured_command = {}
@@ -77,7 +91,6 @@ def test_run_alignment_uses_bundled_colmap_export_params(tmp_path, monkeypatch):
 
 def test_run_alignment_returns_result_on_success(tmp_path, monkeypatch):
     monkeypatch.setattr(realityscan.shutil, "which", lambda name: "C:/fake/RealityScan.exe")
-    monkeypatch.setattr(realityscan.time, "sleep", lambda _: None)
 
     output_dir = tmp_path / "out"
 
@@ -96,7 +109,6 @@ def test_run_alignment_returns_result_on_success(tmp_path, monkeypatch):
 
 def test_run_alignment_calls_on_process_start_with_the_popen_object(tmp_path, monkeypatch):
     monkeypatch.setattr(realityscan.shutil, "which", lambda name: "C:/fake/RealityScan.exe")
-    monkeypatch.setattr(realityscan.time, "sleep", lambda _: None)
 
     output_dir = tmp_path / "out"
     fake_process = _fake_process(0, "aligned ok")
@@ -120,40 +132,18 @@ def test_run_alignment_reports_progress_from_progress_file(tmp_path, monkeypatch
 
     output_dir = tmp_path / "out"
     progress_path = tmp_path / "progress.txt"
-    sleep_calls = {"count": 0}
-
-    def fake_sleep(_seconds):
-        # Simulate the progress file gaining a new line between polls. The
-        # loop structure is: while poll() is None: [check file] -> sleep().
-        # So the Nth sleep() call happens right after the Nth file check -
-        # write here what the (N+1)th check should see.
-        sleep_calls["count"] += 1
-        if sleep_calls["count"] == 1:
-            progress_path.write_text("65536 0.30 0.02 0.05 #progress\n")
-        elif sleep_calls["count"] == 2:
-            progress_path.write_text(
-                "65536 0.30 0.02 0.05 #progress\n65536 0.90 0.04 0.01 #progress\n"
-            )
-
-    monkeypatch.setattr(realityscan.time, "sleep", fake_sleep)
-
-    # 4 poll() calls: the while-condition is checked before each of the 3
-    # loop-body entries (None, None, None) and once more to exit (returncode).
-    # Body entry 1: file doesn't exist yet -> no report -> sleep #1 writes "0.30".
-    # Body entry 2: file has "0.30" -> reports 30.0 -> sleep #2 writes "0.30"+"0.90".
-    # Body entry 3: file's latest line is "0.90" -> reports 90.0 -> sleep #3 (no-op write).
-    # 4th poll() call returns the returncode, ending the loop.
-    process = MagicMock()
-    process.poll = MagicMock(side_effect=[None, None, None, 0])
-    process.returncode = 0
-    process.stdout = MagicMock()
-    process.stdout.read = MagicMock(return_value="ok")
-    process.kill = MagicMock()
-    process.wait = MagicMock(return_value=0)
+    # Progress is polled once per output_queue iteration now rather than once
+    # per time.sleep() call, so precisely interleaving multiple writes with
+    # specific loop iterations would race against the reader thread's own
+    # timing - write the full progress history upfront instead and assert
+    # the latest line is the one that gets reported.
+    progress_path.write_text(
+        "65536 0.30 0.02 0.05 #progress\n65536 0.90 0.04 0.01 #progress\n"
+    )
 
     def fake_popen(command, stdout, stderr, text):
         _write_fake_colmap_output(output_dir)
-        return process
+        return _fake_process(0, "aligned ok")
 
     monkeypatch.setattr(realityscan.subprocess, "Popen", fake_popen)
 
@@ -162,12 +152,40 @@ def test_run_alignment_reports_progress_from_progress_file(tmp_path, monkeypatch
         tmp_path / "frames", output_dir, progress_path=progress_path, on_progress=seen_percentages.append
     )
 
-    assert seen_percentages == [30.0, 90.0]
+    assert seen_percentages == [90.0]
+
+
+def test_run_alignment_calls_on_log_with_accumulated_output(tmp_path, monkeypatch):
+    monkeypatch.setattr(realityscan.shutil, "which", lambda name: "C:/fake/RealityScan.exe")
+
+    output_dir = tmp_path / "out"
+
+    def fake_popen(command, stdout, stderr, text):
+        _write_fake_colmap_output(output_dir)
+        return _fake_process(0, "line one\nline two")
+
+    monkeypatch.setattr(realityscan.subprocess, "Popen", fake_popen)
+
+    log_updates = []
+    # Force every iteration to count as "throttle window elapsed" so on_log
+    # fires deterministically without depending on real wall-clock timing.
+    call_count = [0]
+
+    def fake_monotonic():
+        call_count[0] += 1
+        return call_count[0] * 10.0
+
+    monkeypatch.setattr(realityscan.time, "monotonic", fake_monotonic)
+
+    realityscan.run_alignment(tmp_path / "frames", output_dir, on_log=log_updates.append)
+
+    assert log_updates
+    assert "line one" in log_updates[-1]
+    assert "line two" in log_updates[-1]
 
 
 def test_run_alignment_raises_on_nonzero_exit(tmp_path, monkeypatch):
     monkeypatch.setattr(realityscan.shutil, "which", lambda name: "C:/fake/RealityScan.exe")
-    monkeypatch.setattr(realityscan.time, "sleep", lambda _: None)
 
     def fake_popen(command, stdout, stderr, text):
         return _fake_process(5, "export failed: no valid reconstruction")
@@ -180,7 +198,6 @@ def test_run_alignment_raises_on_nonzero_exit(tmp_path, monkeypatch):
 
 def test_run_alignment_raises_when_output_files_missing_despite_zero_exit(tmp_path, monkeypatch):
     monkeypatch.setattr(realityscan.shutil, "which", lambda name: "C:/fake/RealityScan.exe")
-    monkeypatch.setattr(realityscan.time, "sleep", lambda _: None)
 
     def fake_popen(command, stdout, stderr, text):
         return _fake_process(0, "")
@@ -193,11 +210,19 @@ def test_run_alignment_raises_when_output_files_missing_despite_zero_exit(tmp_pa
 
 def test_run_alignment_raises_on_timeout(tmp_path, monkeypatch):
     monkeypatch.setattr(realityscan.shutil, "which", lambda name: "C:/fake/RealityScan.exe")
-    monkeypatch.setattr(realityscan.time, "sleep", lambda _: None)
+
+    # This reader thread outlives this test (HangingStdout never reaches EOF,
+    # so it's never joined) - see docs/ISSUES.md and test_lichtfeld.py's
+    # identical pattern for why _REAL_SLEEP (not the monkeypatched
+    # time.sleep) must be used here.
+    class HangingStdout:
+        def read(self, _n):
+            _REAL_SLEEP(0.01)
+            return " "  # never EOF, never \r or \n
 
     def fake_popen(command, stdout, stderr, text):
         process = MagicMock()
-        process.poll = MagicMock(return_value=None)  # never finishes
+        process.stdout = HangingStdout()
         process.kill = MagicMock()
         process.wait = MagicMock(return_value=1)
         return process

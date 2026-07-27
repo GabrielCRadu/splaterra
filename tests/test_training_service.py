@@ -49,7 +49,7 @@ def test_compute_training_updates_job_and_stage(job_store, tmp_path, monkeypatch
     fake_result = TrainingResult(splat_path=tmp_path / "out" / "result.ply", log="training ok")
     captured = {}
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None, on_log=None):
         captured["data_path"] = data_path
         captured["output_dir"] = output_dir
         captured["max_gaussians"] = max_gaussians
@@ -116,7 +116,7 @@ def test_compute_training_reports_friendly_message_when_cancelled(job_store, tmp
         undistorted_images_dir=str(tmp_path / "images"),
     )
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start, on_log=None):
         fake_process = MagicMock()
         fake_process.poll.return_value = None
         on_process_start(fake_process)
@@ -165,7 +165,7 @@ def test_compute_training_passes_max_gaussians_from_recommendation(job_store, tm
 
     captured = {}
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None, on_log=None):
         captured["max_gaussians"] = max_gaussians
         return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
 
@@ -196,7 +196,7 @@ def test_compute_training_downscales_images_instead_of_gaussians_for_large_jobs(
     captured = {}
 
     def fake_run_training(
-        data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor, on_progress, on_process_start=None
+        data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor, on_progress, on_process_start=None, on_log=None
     ):
         captured["max_gaussians"] = max_gaussians
         captured["resize_factor"] = resize_factor
@@ -224,7 +224,7 @@ def test_compute_training_uses_full_resolution_for_small_jobs(job_store, tmp_pat
     captured = {}
 
     def fake_run_training(
-        data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor, on_progress, on_process_start=None
+        data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor, on_progress, on_process_start=None, on_log=None
     ):
         captured["resize_factor"] = resize_factor
         return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
@@ -247,7 +247,7 @@ def test_compute_training_omits_max_gaussians_when_no_recommendation(job_store, 
 
     captured = {}
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None, on_log=None):
         captured["max_gaussians"] = max_gaussians
         return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
 
@@ -267,7 +267,7 @@ def test_compute_training_forwards_progress_to_job_store(job_store, tmp_path, mo
         undistorted_images_dir=str(tmp_path / "images"),
     )
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None, on_log=None):
         on_progress(20.0)
         on_progress(80.0)
         return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
@@ -278,6 +278,38 @@ def test_compute_training_forwards_progress_to_job_store(job_store, tmp_path, mo
 
     stage = job_store.get_stage(job.id, "training")
     assert stage.progress_percent == 80.0
+
+
+def test_compute_training_forwards_log_to_job_store(job_store, tmp_path, monkeypatch):
+    # Real-time visibility while the stage is still "running", not just the
+    # final log written once it finishes.
+    _patch_diagnostics(monkeypatch)
+    job = job_store.create_job("Test")
+    job_store.update_job(
+        job.id,
+        colmap_sparse_dir=str(tmp_path / "sparse" / "0"),
+        undistorted_images_dir=str(tmp_path / "images"),
+    )
+
+    seen_running_logs = []
+    real_upsert_stage = job_store.upsert_stage
+
+    def spy_upsert_stage(job_id, stage, status, **kwargs):
+        if status == "running" and kwargs.get("log") is not None:
+            seen_running_logs.append(kwargs["log"])
+        real_upsert_stage(job_id, stage, status, **kwargs)
+
+    monkeypatch.setattr(job_store, "upsert_stage", spy_upsert_stage)
+
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None, on_log=None):
+        on_log("partial output so far")
+        return TrainingResult(splat_path=tmp_path / "result.ply", log="final log")
+
+    monkeypatch.setattr(training_service, "run_training", fake_run_training)
+
+    training_service.compute_training(job_store, job.id)
+
+    assert seen_running_logs == ["partial output so far"]
 
 
 def test_compute_training_passes_variable_exposure_as_bilateral_grid(job_store, tmp_path, monkeypatch):
@@ -291,7 +323,7 @@ def test_compute_training_passes_variable_exposure_as_bilateral_grid(job_store, 
 
     captured = {}
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None, on_log=None):
         captured["bilateral_grid"] = bilateral_grid
         return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
 
@@ -315,7 +347,7 @@ def test_compute_training_logs_metrics_on_success(job_store, tmp_path, monkeypat
         undistorted_images_dir=str(tmp_path / "images"),
     )
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None, on_log=None):
         on_progress(50.0)
         on_progress(100.0)
         return TrainingResult(splat_path=tmp_path / "result.ply", log="Final splats: 4800000")
