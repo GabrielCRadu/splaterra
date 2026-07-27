@@ -41,7 +41,13 @@ Backlog de idei, in orice ordine. Adaugat de owner, de rezolvat de Claude in ses
       procesarii (extragere, alignment, training). Panou live in `static/job.html`, vizibil cat
       timp un stage ruleaza; endpoint nou `GET /hardware/usage` (`app/hardware.py`). Facut in
       `6b76428`.
-- [ ] ETA (timp estimat ramas) si procent de completion (text explicit, ex. "42%", nu doar latimea
+- [x] ETA (timp estimat ramas) si procent de completion (text explicit, ex. "42%", nu doar latimea
       barei) pentru alignment si training, afisate langa bara de progres cat timp stage-ul ruleaza.
-- [ ] Output CLI in timp real (nu doar dupa ce stage-ul se termina), ascuns dupa acelasi buton
+      Calculat client-side in `static/job.html` din `started_at` + `progress_percent` (deja expuse
+      de `GET /jobs/{id}/stages`), fara modificari de backend pentru asta. Facut in `24a03af`.
+- [x] Output CLI in timp real (nu doar dupa ce stage-ul se termina), ascuns dupa acelasi buton
       "advanced view" existent — momentan `job_stages.log` se populeaza abia la final.
+      `run_extraction`/`run_alignment`/`run_training` accepta acum un callback `on_log`, apelat cu
+      output-ul acumulat, throttled la ~1/s. `run_alignment` a necesitat portarea la acelasi model
+      cu thread de citire pe care il foloseau deja extragerea si training-ul (citea stdout blocant
+      abia dupa ce procesul se termina). Facut in `24a03af`.
