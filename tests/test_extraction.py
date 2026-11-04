@@ -30,6 +30,81 @@ def test_extract_frames_updates_job_and_stage(job_store, monkeypatch):
     assert stage.status == "done"
 
 
+def test_extract_frames_invalidates_downstream_stages_when_re_extracted(job_store, monkeypatch):
+    job = job_store.create_job("Test")
+    job_store.update_job(
+        job.id,
+        raw_video_path="/data/raw/video.mp4",
+        colmap_sparse_dir="/data/jobs/x/alignment/sparse/0",
+        undistorted_images_dir="/data/jobs/x/alignment/images",
+        splat_path="/data/jobs/x/training/splat_30000.ply",
+        export_path="/data/jobs/x/training/export.spz",
+        export_format="spz",
+    )
+    job_store.upsert_stage(job.id, "alignment", "done")
+    job_store.upsert_stage(job.id, "training", "done")
+    job_store.upsert_stage(job.id, "export", "done")
+
+    fake_frames = [Path("f1.jpg")]
+    monkeypatch.setattr(
+        extraction,
+        "run_extraction",
+        MagicMock(return_value=ExtractionResult(frames=fake_frames, log="ok")),
+    )
+
+    extraction.extract_frames(job_store, job.id)
+
+    fetched = job_store.get_job(job.id)
+    assert fetched.colmap_sparse_dir is None
+    assert fetched.undistorted_images_dir is None
+    assert fetched.splat_path is None
+    assert fetched.export_path is None
+    assert fetched.export_format is None
+    assert job_store.get_stage(job.id, "alignment") is None
+    assert job_store.get_stage(job.id, "training") is None
+    assert job_store.get_stage(job.id, "export") is None
+    # frame_extraction's own stage must survive - only downstream is invalidated
+    assert job_store.get_stage(job.id, "frame_extraction").status == "done"
+
+
+def test_extract_frames_does_not_touch_downstream_stages_on_first_extraction(job_store, monkeypatch):
+    job = job_store.create_job("Test")
+    job_store.update_job(job.id, raw_video_path="/data/raw/video.mp4")
+
+    fake_frames = [Path("f1.jpg")]
+    monkeypatch.setattr(
+        extraction,
+        "run_extraction",
+        MagicMock(return_value=ExtractionResult(frames=fake_frames, log="ok")),
+    )
+
+    extraction.extract_frames(job_store, job.id)
+
+    assert job_store.get_stage(job.id, "alignment") is None
+    assert job_store.get_stage(job.id, "training") is None
+
+
+def test_extract_frames_clears_stale_output_before_running(job_store, monkeypatch):
+    job = job_store.create_job("Test")
+    job_store.update_job(job.id, raw_video_path="/data/raw/video.mp4")
+
+    output_dir = extraction.frames_dir(job.id)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    stale_file = output_dir / "stale_from_previous_run.jpg"
+    stale_file.write_bytes(b"old")
+
+    fake_frames = [Path("f1.jpg")]
+    monkeypatch.setattr(
+        extraction,
+        "run_extraction",
+        MagicMock(return_value=ExtractionResult(frames=fake_frames, log="ok")),
+    )
+
+    extraction.extract_frames(job_store, job.id)
+
+    assert not stale_file.exists()
+
+
 def test_extract_frames_without_ingested_video_raises(job_store):
     job = job_store.create_job("Test")
     with pytest.raises(extraction.ExtractionError, match="no ingested video"):
@@ -167,6 +242,25 @@ def test_import_local_frames_copies_images_and_updates_job(job_store, tmp_path):
     assert stage.status == "done"
 
 
+def test_import_local_frames_invalidates_downstream_stages_when_re_imported(job_store, tmp_path):
+    job = job_store.create_job("Test")
+    job_store.update_job(job.id, colmap_sparse_dir="/data/jobs/x/alignment/sparse/0", splat_path="/data/x.ply")
+    job_store.upsert_stage(job.id, "alignment", "done")
+    job_store.upsert_stage(job.id, "training", "done")
+
+    source = tmp_path / "existing_frames"
+    source.mkdir()
+    (source / "0001.jpg").write_bytes(b"fake")
+
+    extraction.import_local_frames(job_store, job.id, source)
+
+    fetched = job_store.get_job(job.id)
+    assert fetched.colmap_sparse_dir is None
+    assert fetched.splat_path is None
+    assert job_store.get_stage(job.id, "alignment") is None
+    assert job_store.get_stage(job.id, "training") is None
+
+
 def test_import_local_frames_unknown_job_raises_without_stage_write(job_store, tmp_path):
     with pytest.raises(extraction.ExtractionError, match="Unknown job"):
         extraction.import_local_frames(job_store, "does-not-exist", tmp_path)
@@ -224,22 +318,48 @@ def test_extract_frames_uses_360_extractor_for_360_device(job_store, monkeypatch
     monkeypatch.setattr(extraction, "run_extraction", run_extraction_mock)
     monkeypatch.setattr(extraction, "run_360_extraction", run_360_mock)
 
-    count = extraction.extract_frames(job_store, job.id, interval_seconds=2.0, ai_mask=True)
+    count = extraction.extract_frames(
+        job_store, job.id, interval_seconds=2.0, ai_mask=True, skip_up_frames=True
+    )
 
     run_extraction_mock.assert_not_called()
     run_360_mock.assert_called_once()
     assert run_360_mock.call_args.kwargs["interval_seconds"] == 2.0
     assert run_360_mock.call_args.kwargs["ai_mask"] is True
+    assert run_360_mock.call_args.kwargs["skip_up_frames"] is True
     assert count == 2
 
     stage = job_store.get_stage(job.id, "frame_extraction")
     assert stage.status == "done"
 
 
-def test_extract_frames_360_device_ignores_multi_clip_raw_dir(job_store, monkeypatch, tmp_path):
-    # run_360_extraction doesn't support a directory of multiple clips (Phase
-    # 1 limitation) - a 360 job must always pass the single raw_video_path,
-    # even if list_raw_videos() would otherwise report multiple files.
+def test_extract_frames_360_device_forwards_layout_settings(job_store, monkeypatch):
+    job = job_store.create_job("Test", device_type="dji_avata_360")
+    job_store.update_job(job.id, raw_video_path="/data/raw/video.mp4")
+
+    run_360_mock = MagicMock(
+        return_value=ThreeSixtyExtractionResult(frames=[Path("f1.jpg")], log="ok")
+    )
+    monkeypatch.setattr(extraction, "run_360_extraction", run_360_mock)
+
+    extraction.extract_frames(
+        job_store, job.id, layout="ring", camera_count=8, resolution=4096, nadir_mask=True
+    )
+
+    kwargs = run_360_mock.call_args.kwargs
+    assert kwargs["layout"] == "ring"
+    assert kwargs["camera_count"] == 8
+    assert kwargs["resolution"] == 4096
+    assert kwargs["nadir_mask"] is True
+
+
+def test_extract_frames_360_device_uses_raw_dir_for_multiple_clips(job_store, monkeypatch, tmp_path):
+    # 360Extractor's own CLI accepts a directory input (os.walk over
+    # supported video extensions, one <stem>_processed/ output subfolder per
+    # clip under the shared --output) - confirmed against the real installed
+    # tool, so a multi-clip 360 job passes raw_dir(job_id) just like the
+    # standard sharp-frames path does (Faza 2, Phase 1's single-file
+    # limitation lifted).
     from app.paths import raw_dir
 
     job = job_store.create_job("Test", device_type="dji_avata_360")
@@ -256,7 +376,76 @@ def test_extract_frames_360_device_ignores_multi_clip_raw_dir(job_store, monkeyp
 
     extraction.extract_frames(job_store, job.id)
 
+    assert run_360_mock.call_args.args[0] == directory
+
+
+def test_extract_frames_360_device_uses_single_file_for_one_clip(job_store, monkeypatch, tmp_path):
+    from app.paths import raw_dir
+
+    job = job_store.create_job("Test", device_type="dji_avata_360")
+    directory = raw_dir(job.id)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "a_clip.mp4").write_bytes(b"fake")
+    job_store.update_job(job.id, raw_video_path=str(directory / "a_clip.mp4"))
+
+    run_360_mock = MagicMock(
+        return_value=ThreeSixtyExtractionResult(frames=[Path("f1.jpg")], log="ok")
+    )
+    monkeypatch.setattr(extraction, "run_360_extraction", run_360_mock)
+
+    extraction.extract_frames(job_store, job.id)
+
     assert run_360_mock.call_args.args[0] == directory / "a_clip.mp4"
+
+
+def test_extract_frames_writes_settings_json_for_standard_device(job_store, monkeypatch):
+    import json
+
+    job = job_store.create_job("Test")
+    job_store.update_job(job.id, raw_video_path="/data/raw/video.mp4")
+
+    monkeypatch.setattr(
+        extraction,
+        "run_extraction",
+        MagicMock(return_value=ExtractionResult(frames=[Path("f1.jpg")], log="ok")),
+    )
+
+    extraction.extract_frames(
+        job_store, job.id, selection_method="best-n", num_frames=250, fps=8
+    )
+
+    stage = job_store.get_stage(job.id, "frame_extraction")
+    settings = json.loads(stage.settings_json)
+    assert settings == {"selection_method": "best-n", "num_frames": 250, "fps": 8}
+
+
+def test_extract_frames_writes_settings_json_for_360_device(job_store, monkeypatch):
+    import json
+
+    job = job_store.create_job("Test", device_type="dji_avata_360")
+    job_store.update_job(job.id, raw_video_path="/data/raw/video.mp4")
+
+    monkeypatch.setattr(
+        extraction,
+        "run_360_extraction",
+        MagicMock(return_value=ThreeSixtyExtractionResult(frames=[Path("f1.jpg")], log="ok")),
+    )
+
+    extraction.extract_frames(
+        job_store, job.id, interval_seconds=2.5, ai_mask=True, skip_up_frames=False
+    )
+
+    stage = job_store.get_stage(job.id, "frame_extraction")
+    settings = json.loads(stage.settings_json)
+    assert settings == {
+        "interval_seconds": 2.5,
+        "ai_mask": True,
+        "skip_up_frames": False,
+        "layout": "cube",
+        "camera_count": 6,
+        "resolution": None,
+        "nadir_mask": False,
+    }
 
 
 def test_extract_frames_reports_friendly_message_when_cancelled(job_store, tmp_path, monkeypatch):

@@ -1,6 +1,6 @@
 # Context proiect
 
-Splat Prep: aplicatie personala care streamline-uieste preprocesarea footage-ului (video de la
+Splaterra: aplicatie personala care streamline-uieste preprocesarea footage-ului (video de la
 camera/telefon/drona) pentru reconstructie 3D Gaussian Splatting. Automatizeaza extragerea de
 cadre sharp, citeste metadata din camera + hardware-ul local si recomanda setari pentru
 RealityScan si LichtFeld, orchestreaza RealityScan (alignment) headless, si expune totul printr-un
@@ -26,7 +26,7 @@ default de instalare:
 - `sharp-frames` — selectie cadre sharp (`pip install sharp-frames`)
 - RealityScan — alignment; NU e pe PATH, e descoperit prin fallback la
   `C:\Program Files\Epic Games\RealityScan_*\RealityScan.exe`, sau la directorul indicat de
-  env var `SPLATPREP_REALITYSCAN_DIR` daca instalarea e in alta parte (vezi `app/realityscan.py`).
+  env var `SPLATERRA_REALITYSCAN_DIR` daca instalarea e in alta parte (vezi `app/realityscan.py`).
 
 # Conventii de cod
 

@@ -25,6 +25,15 @@ def start_upload(job_id: str, filename: str, total_chunks: int) -> str:
     safe_name = Path(filename).name
     if not safe_name or safe_name in (".", "..") or safe_name != filename:
         raise UploadError(f"Invalid filename: {filename!r}")
+    if Path(safe_name).suffix.lower() == ".osv":
+        # .OSV is the raw dual-fisheye format DJI Osmo 360/Avata 360 write -
+        # rejected before a single chunk is uploaded (cheaper than failing
+        # after gigabytes went over the wire) since this app only supports
+        # already-stitched equirectangular footage in Phase 1 (see CLAUDE.md).
+        raise UploadError(
+            "Fisierele .OSV (dual-fisheye brut) nu sunt suportate. Stitch-uieste clipul in "
+            "DJI Studio (export echirectangular) inainte sa il incarci aici."
+        )
 
     upload_id = str(uuid.uuid4())
     chunks_dir = upload_chunks_dir(job_id, upload_id)
@@ -82,10 +91,25 @@ def complete_upload(store: JobStore, job_id: str, upload_id: str) -> Path:
     store.upsert_stage(
         job_id, "ingestion", "running", started_at=datetime.now(timezone.utc).isoformat()
     )
-    with destination.open("wb") as output:
-        for index in expected:
-            chunk_path = chunks_dir / f"{index:06d}.part"
-            output.write(chunk_path.read_bytes())
+    # Real incident: reassembling a large chunked upload (8.92GB, 8K 360
+    # footage) ran the destination drive out of space partway through -
+    # output.write() raised OSError with nothing here to catch it, so the
+    # exception propagated uncaught into run_with_new_store's broad
+    # try/except, which only logs it server-side. The stage was left stuck
+    # on "running" forever with zero indication to the user of what
+    # happened. import_local_file() already guards its copy this way;
+    # complete_upload()'s chunk-reassembly loop didn't.
+    try:
+        with destination.open("wb") as output:
+            for index in expected:
+                chunk_path = chunks_dir / f"{index:06d}.part"
+                output.write(chunk_path.read_bytes())
+    except OSError as exc:
+        store.upsert_stage(
+            job_id, "ingestion", "failed", finished_at=datetime.now(timezone.utc).isoformat(),
+            error=f"Failed to reassemble upload: {exc}",
+        )
+        raise UploadError(f"Failed to reassemble upload: {exc}") from exc
 
     store.update_job(job_id, raw_video_path=str(destination))
     store.upsert_stage(

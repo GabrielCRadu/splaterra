@@ -3,10 +3,19 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Splat Prep</title>
+<title>Splaterra</title>
 <link rel="stylesheet" href="/css/app.css" />
+<link rel="manifest" href="/manifest.json" />
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#050506" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Splaterra" />
 </head>
 <body>
+<a class="brand-logo-link" href="/" aria-label="Splaterra - meniu principal"><img class="brand-logo" src="/brand/logo-splaterra.svg" alt="Splaterra" /></a>
 <h1>Job-uri</h1>
 <p class="subtitle" id="job-count">Se incarca...</p>
 
@@ -17,7 +26,7 @@
 <button class="done-button" id="done-button" style="display:none;">Gata</button>
 <div class="trash-target" id="trash-target" style="display:none;" aria-label="Trage aici ca sa stergi">&#128465;&#65039;</div>
 
-<div class="modal-overlay" id="delete-modal" style="display:none;">
+<div class="modal-overlay" id="delete-modal">
   <div class="modal-card">
     <div class="modal-title">Stergi job-ul?</div>
     <div class="modal-body" id="delete-modal-text"></div>
@@ -30,13 +39,6 @@
 
 <script src="/js/app.js"></script>
 <script>
-  const STAGE_LABELS = {
-    ingestion: "Ingestie",
-    frame_extraction: "Extragere cadre",
-    alignment: "Alignment",
-    recommendation: "Recomandare",
-  };
-
   function stagePill(stages) {
     if (stages.length === 0) {
       return '<span class="pill pill-gray">Nou</span>';
@@ -53,7 +55,13 @@
   }
 
   async function loadJobs() {
-    const jobs = await apiGet("/jobs");
+    let jobs;
+    try {
+      jobs = await apiGet("/jobs");
+    } catch (err) {
+      document.getElementById("job-count").textContent = err.message || String(err);
+      return;
+    }
     document.getElementById("job-count").textContent =
       jobs.length === 0 ? "Niciun job inca" : `${jobs.length} job-uri`;
 
@@ -211,12 +219,12 @@
     jobIdPendingDelete = jobId;
     document.getElementById("delete-modal-text").textContent =
       `"${jobName}" si toate fisierele lui (video, cadre, rezultate) vor fi sterse definitiv. Nu se poate anula.`;
-    document.getElementById("delete-modal").style.display = "flex";
+    document.getElementById("delete-modal").classList.add("visible");
   }
 
   function hideDeleteModal() {
     jobIdPendingDelete = null;
-    document.getElementById("delete-modal").style.display = "none";
+    document.getElementById("delete-modal").classList.remove("visible");
   }
 
   document.getElementById("cancel-delete-btn").addEventListener("click", hideDeleteModal);
@@ -226,13 +234,17 @@
     if (!jobId) return;
     hideDeleteModal();
 
-    const response = await fetch(`/jobs/${jobId}`, { method: "DELETE" });
-    if (!response.ok && response.status !== 404) {
-      alert(
-        response.status === 409
-          ? "Job-ul are o etapa in curs de rulare - asteapta sa se termine inainte sa il stergi."
-          : "Nu am putut sterge job-ul."
-      );
+    try {
+      const response = await fetch(`/jobs/${jobId}`, { method: "DELETE" });
+      if (!response.ok && response.status !== 404) {
+        alert(
+          response.status === 409
+            ? "Job-ul are o etapa in curs de rulare - asteapta sa se termine inainte sa il stergi."
+            : "Nu am putut sterge job-ul."
+        );
+      }
+    } catch (err) {
+      alert(err.message || String(err));
     }
     loadJobs();
   });

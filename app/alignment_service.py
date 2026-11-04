@@ -97,6 +97,29 @@ def compute_alignment(store: JobStore, job_id: str) -> AlignmentResult:
             on_process_start=lambda p: process_registry.register(job_id, "alignment", p),
             on_log=report_log,
         )
+
+        # Kept inside the same try/except as run_alignment (not after it):
+        # images_dir.iterdir() below is a filesystem read that - even though
+        # run_alignment already confirmed the directory exists right before
+        # returning - could still race against an external deletion in this
+        # narrow window. Left unguarded, that would raise past this function
+        # entirely (only caught by the background task's outer catch-all in
+        # app/deps.py), leaving the stage stuck on "running" forever with no
+        # visible failure instead of the "failed" status every other error
+        # path here produces.
+        coverage_error = _registration_coverage_error(result.images_dir, job.frame_count)
+        if coverage_error is not None:
+            store.upsert_stage(job_id, "alignment", "failed", finished_at=_now(), error=coverage_error)
+            raise AlignmentError(coverage_error)
+
+        store.update_job(
+            job_id,
+            colmap_sparse_dir=str(result.sparse_dir),
+            undistorted_images_dir=str(result.images_dir),
+        )
+        store.upsert_stage(job_id, "alignment", "done", finished_at=_now(), log=result.log)
+    except AlignmentError:
+        raise  # already recorded as "failed" above - avoid a redundant duplicate write
     except Exception as exc:
         message = (
             "Alignment anulat de utilizator"
@@ -108,15 +131,4 @@ def compute_alignment(store: JobStore, job_id: str) -> AlignmentResult:
     finally:
         process_registry.unregister(job_id, "alignment")
 
-    coverage_error = _registration_coverage_error(result.images_dir, job.frame_count)
-    if coverage_error is not None:
-        store.upsert_stage(job_id, "alignment", "failed", finished_at=_now(), error=coverage_error)
-        raise AlignmentError(coverage_error)
-
-    store.update_job(
-        job_id,
-        colmap_sparse_dir=str(result.sparse_dir),
-        undistorted_images_dir=str(result.images_dir),
-    )
-    store.upsert_stage(job_id, "alignment", "done", finished_at=_now(), log=result.log)
     return result

@@ -11,7 +11,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-_EPIC_GAMES_DIR = Path(os.environ.get("SPLATPREP_REALITYSCAN_DIR", r"C:\Program Files\Epic Games"))
+from app.process_kill import kill_process_tree
+
+_EPIC_GAMES_DIR = Path(os.environ.get("SPLATERRA_REALITYSCAN_DIR", r"C:\Program Files\Epic Games"))
 _PROGRESS_LINE_RE = re.compile(r"^\d+\s+([\d.]+)\s+")
 _COLMAP_EXPORT_PARAMS = Path(__file__).resolve().parent / "resources" / "realityscan_colmap_export.xml"
 
@@ -112,7 +114,17 @@ def run_alignment(
         "-quit",
     ]
 
-    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    # See app/lichtfeld.py's identical Popen call for why encoding/errors are
+    # explicit: Windows' text=True defaults to the console codepage, not
+    # UTF-8, which can raise UnicodeDecodeError inside the reader thread.
+    process = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     if on_process_start is not None:
         on_process_start(process)
     output_queue: queue.Queue = queue.Queue()
@@ -127,7 +139,7 @@ def run_alignment(
     while True:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            process.kill()
+            kill_process_tree(process)
             process.wait()
             raise RealityScanError(
                 f"RealityScan did not finish within {timeout_seconds}s and was terminated"

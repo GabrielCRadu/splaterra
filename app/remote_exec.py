@@ -3,17 +3,29 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
-
-from app.runpod_client import PodConnection
 
 
 class RemoteExecError(Exception):
     pass
 
 
+@dataclass
+class PodConnection:
+    # Shared by every cloud GPU provider client (app/runpod_client.py,
+    # app/vast_client.py) - each provider's own API shape is different, but
+    # once a pod/instance is SSH-reachable it's the exact same
+    # host/port/key-based scp+ssh flow below regardless of which provider
+    # started it, so this module (not any one provider's client) owns the
+    # connection type both providers' create/wait functions return.
+    pod_id: str
+    ssh_host: str
+    ssh_port: int
+
+
 def _ssh_key_path() -> Path:
-    return Path(os.environ.get("SPLATPREP_SSH_KEY_PATH", str(Path.home() / ".ssh" / "id_rsa")))
+    return Path(os.environ.get("SPLATERRA_SSH_KEY_PATH", str(Path.home() / ".ssh" / "id_rsa")))
 
 
 def _ssh_binary() -> str:
@@ -89,7 +101,8 @@ def run_remote_command(
 def _run(command: list[str], timeout_seconds: int) -> str:
     try:
         process = subprocess.run(
-            command, capture_output=True, text=True, check=False, timeout=timeout_seconds
+            command, capture_output=True, text=True, check=False, timeout=timeout_seconds,
+            encoding="utf-8", errors="replace",
         )
     except subprocess.TimeoutExpired as exc:
         raise RemoteExecError(

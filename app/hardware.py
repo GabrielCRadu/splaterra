@@ -38,7 +38,10 @@ def _run_nvidia_smi(query: str, *, timeout: float = 5.0) -> str | None:
         return None
 
     command = [binary, f"--query-gpu={query}", "--format=csv,noheader,nounits"]
-    process = subprocess.run(command, capture_output=True, text=True, check=False, timeout=timeout)
+    process = subprocess.run(
+        command, capture_output=True, text=True, check=False, timeout=timeout,
+        encoding="utf-8", errors="replace",
+    )
     if process.returncode != 0 or not process.stdout.strip():
         return None
     return process.stdout.strip().splitlines()[0]

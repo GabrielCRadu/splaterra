@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime, timezone
+from typing import Literal
 
 from app import process_registry
+from app.cloud_training import run_cloud_training
 from app.hardware import UsageSnapshot, detect_hardware, sample_usage
 from app.job_store import JobStore
 from app.lichtfeld import TrainingResult, run_training
@@ -83,7 +85,19 @@ def _log_training_metrics(
 
 
 def compute_training(
-    store: JobStore, job_id: str, *, variable_exposure: bool = False
+    store: JobStore,
+    job_id: str,
+    *,
+    variable_exposure: bool = False,
+    max_gaussians: int | None = None,
+    iterations: int | None = None,
+    resize_factor: int | None = None,
+    eval: bool = False,
+    test_every: int | None = None,
+    use_cloud: bool = False,
+    cloud_provider: Literal["runpod", "vastai"] = "runpod",
+    cloud_image: str | None = None,
+    cloud_gpu_type: str | None = None,
 ) -> TrainingResult:
     job = store.get_job(job_id)
     if job is None:
@@ -96,6 +110,11 @@ def compute_training(
         now = _now()
         store.upsert_stage(job_id, "training", "failed", started_at=now, finished_at=now, error=message)
         raise TrainingError(message)
+    if use_cloud and (not cloud_image or not cloud_gpu_type):
+        message = "Cloud training requires both an image name and a GPU type"
+        now = _now()
+        store.upsert_stage(job_id, "training", "failed", started_at=now, finished_at=now, error=message)
+        raise TrainingError(message)
 
     # alignment_dir(job_id) is the COLMAP dataset root LichtFeld's --data-path
     # expects (parent of both sparse/0/ and images/) - it's the same output_dir
@@ -104,10 +123,28 @@ def compute_training(
     # colmap_sparse_dir.
     data_path = alignment_dir(job_id)
     output_dir = training_dir(job_id)
-    max_gaussians = _max_gaussians_from_recommendation(job.recommendation_json)
-    resize_factor = training_resize_factor(job.frame_count)
+    # An explicit slider value from the UI always wins; falling back to the
+    # recommendation keeps the old behavior for any caller that doesn't pass one.
+    if max_gaussians is None:
+        max_gaussians = _max_gaussians_from_recommendation(job.recommendation_json)
+    if resize_factor is None:
+        resize_factor = training_resize_factor(job.frame_count)
 
-    store.upsert_stage(job_id, "training", "running", started_at=_now())
+    settings_json = json.dumps(
+        {
+            "variable_exposure": variable_exposure,
+            "max_gaussians": max_gaussians,
+            "iterations": iterations,
+            "resize_factor": resize_factor,
+            "eval": eval,
+            "test_every": test_every,
+            "use_cloud": use_cloud,
+            "cloud_provider": cloud_provider if use_cloud else None,
+            "cloud_image": cloud_image if use_cloud else None,
+            "cloud_gpu_type": cloud_gpu_type if use_cloud else None,
+        }
+    )
+    store.upsert_stage(job_id, "training", "running", started_at=_now(), settings_json=settings_json)
 
     usage_samples: list[UsageSnapshot] = []
 
@@ -123,16 +160,46 @@ def compute_training(
         store.upsert_stage(job_id, "training", "running", log=text)
 
     try:
-        result = run_training(
-            data_path,
-            output_dir,
-            max_gaussians=max_gaussians,
-            bilateral_grid=variable_exposure,
-            resize_factor=resize_factor,
-            on_progress=report_progress,
-            on_log=report_log,
-            on_process_start=lambda p: process_registry.register(job_id, "training", p),
-        )
+        if use_cloud:
+            # No live progress/log streaming yet (cloud_job.run_cloud_job runs
+            # the remote command as a single blocking SSH call, not a
+            # Popen+reader-thread like the local path) - report_progress/
+            # report_log are simply never called, same graceful-degradation
+            # the frontend already handles when LichtFeld's own log format
+            # doesn't match (indeterminate progress bar). Cancel from the UI
+            # also can't interrupt an in-flight cloud run yet (see
+            # cancel_or_force_fail in app/deps.py): it'll mark the stage
+            # failed locally, but the remote pod keeps running/billing until
+            # the command finishes or times out - terminate it manually from
+            # the provider's dashboard if that happens. UNVERIFIED against a
+            # real account (see docs/TODO.md).
+            result = run_cloud_training(
+                data_path,
+                output_dir,
+                provider=cloud_provider,
+                image_name=cloud_image,
+                gpu_type_id=cloud_gpu_type,
+                max_gaussians=max_gaussians,
+                iterations=iterations,
+                bilateral_grid=variable_exposure,
+                resize_factor=resize_factor,
+                eval=eval,
+                test_every=test_every,
+            )
+        else:
+            result = run_training(
+                data_path,
+                output_dir,
+                max_gaussians=max_gaussians,
+                iterations=iterations,
+                bilateral_grid=variable_exposure,
+                resize_factor=resize_factor,
+                eval=eval,
+                test_every=test_every,
+                on_progress=report_progress,
+                on_log=report_log,
+                on_process_start=lambda p: process_registry.register(job_id, "training", p),
+            )
     except Exception as exc:
         message = (
             "Antrenare anulata de utilizator"
@@ -159,7 +226,11 @@ def compute_training(
         process_registry.unregister(job_id, "training")
 
     store.update_job(job_id, splat_path=str(result.splat_path))
-    store.upsert_stage(job_id, "training", "done", finished_at=_now(), log=result.log)
+    eval_metrics_json = json.dumps(result.eval_metrics) if result.eval_metrics is not None else None
+    store.upsert_stage(
+        job_id, "training", "done", finished_at=_now(), log=result.log,
+        eval_metrics_json=eval_metrics_json,
+    )
     _log_training_metrics(
         job_id,
         status="done",

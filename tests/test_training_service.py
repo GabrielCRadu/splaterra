@@ -49,7 +49,7 @@ def test_compute_training_updates_job_and_stage(job_store, tmp_path, monkeypatch
     fake_result = TrainingResult(splat_path=tmp_path / "out" / "result.ply", log="training ok")
     captured = {}
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None, on_log=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, iterations=None, bilateral_grid, resize_factor=1, eval=False, test_every=None, on_progress, on_process_start=None, on_log=None):
         captured["data_path"] = data_path
         captured["output_dir"] = output_dir
         captured["max_gaussians"] = max_gaussians
@@ -116,7 +116,7 @@ def test_compute_training_reports_friendly_message_when_cancelled(job_store, tmp
         undistorted_images_dir=str(tmp_path / "images"),
     )
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start, on_log=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, iterations=None, bilateral_grid, resize_factor=1, eval=False, test_every=None, on_progress, on_process_start, on_log=None):
         fake_process = MagicMock()
         fake_process.poll.return_value = None
         on_process_start(fake_process)
@@ -165,7 +165,7 @@ def test_compute_training_passes_max_gaussians_from_recommendation(job_store, tm
 
     captured = {}
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None, on_log=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, iterations=None, bilateral_grid, resize_factor=1, eval=False, test_every=None, on_progress, on_process_start=None, on_log=None):
         captured["max_gaussians"] = max_gaussians
         return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
 
@@ -174,6 +174,51 @@ def test_compute_training_passes_max_gaussians_from_recommendation(job_store, tm
     training_service.compute_training(job_store, job.id)
 
     assert captured["max_gaussians"] == 3_000_000
+
+
+def test_compute_training_max_gaussians_override_wins_over_recommendation(job_store, tmp_path, monkeypatch):
+    _patch_diagnostics(monkeypatch)
+    job = job_store.create_job("Test")
+    job_store.update_job(
+        job.id,
+        colmap_sparse_dir=str(tmp_path / "sparse" / "0"),
+        undistorted_images_dir=str(tmp_path / "images"),
+        recommendation_json=json.dumps({"lichtfeld": {"max_gaussians": 3_000_000, "bf16": True}}),
+    )
+
+    captured = {}
+
+    def fake_run_training(data_path, output_dir, *, max_gaussians, iterations=None, bilateral_grid, resize_factor=1, eval=False, test_every=None, on_progress, on_process_start=None, on_log=None):
+        captured["max_gaussians"] = max_gaussians
+        return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
+
+    monkeypatch.setattr(training_service, "run_training", fake_run_training)
+
+    training_service.compute_training(job_store, job.id, max_gaussians=1_500_000)
+
+    assert captured["max_gaussians"] == 1_500_000
+
+
+def test_compute_training_passes_iterations_override(job_store, tmp_path, monkeypatch):
+    _patch_diagnostics(monkeypatch)
+    job = job_store.create_job("Test")
+    job_store.update_job(
+        job.id,
+        colmap_sparse_dir=str(tmp_path / "sparse" / "0"),
+        undistorted_images_dir=str(tmp_path / "images"),
+    )
+
+    captured = {}
+
+    def fake_run_training(data_path, output_dir, *, max_gaussians, iterations=None, bilateral_grid, resize_factor=1, eval=False, test_every=None, on_progress, on_process_start=None, on_log=None):
+        captured["iterations"] = iterations
+        return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
+
+    monkeypatch.setattr(training_service, "run_training", fake_run_training)
+
+    training_service.compute_training(job_store, job.id, iterations=15000)
+
+    assert captured["iterations"] == 15000
 
 
 def test_compute_training_downscales_images_instead_of_gaussians_for_large_jobs(
@@ -196,7 +241,7 @@ def test_compute_training_downscales_images_instead_of_gaussians_for_large_jobs(
     captured = {}
 
     def fake_run_training(
-        data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor, on_progress, on_process_start=None, on_log=None
+        data_path, output_dir, *, max_gaussians, iterations=None, bilateral_grid, resize_factor, eval=False, test_every=None, on_progress, on_process_start=None, on_log=None
     ):
         captured["max_gaussians"] = max_gaussians
         captured["resize_factor"] = resize_factor
@@ -224,7 +269,7 @@ def test_compute_training_uses_full_resolution_for_small_jobs(job_store, tmp_pat
     captured = {}
 
     def fake_run_training(
-        data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor, on_progress, on_process_start=None, on_log=None
+        data_path, output_dir, *, max_gaussians, iterations=None, bilateral_grid, resize_factor, eval=False, test_every=None, on_progress, on_process_start=None, on_log=None
     ):
         captured["resize_factor"] = resize_factor
         return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
@@ -234,6 +279,213 @@ def test_compute_training_uses_full_resolution_for_small_jobs(job_store, tmp_pat
     training_service.compute_training(job_store, job.id)
 
     assert captured["resize_factor"] == 1
+
+
+def test_compute_training_resize_factor_override_wins_over_recommendation(job_store, tmp_path, monkeypatch):
+    _patch_diagnostics(monkeypatch)
+    job = job_store.create_job("Test")
+    job_store.update_job(
+        job.id,
+        colmap_sparse_dir=str(tmp_path / "sparse" / "0"),
+        undistorted_images_dir=str(tmp_path / "images"),
+        frame_count=830,
+        recommendation_json=json.dumps({"lichtfeld": {"max_gaussians": 4_800_000, "bf16": True}}),
+    )
+
+    captured = {}
+
+    def fake_run_training(
+        data_path, output_dir, *, max_gaussians, iterations=None, bilateral_grid, resize_factor, eval=False, test_every=None, on_progress, on_process_start=None, on_log=None
+    ):
+        captured["resize_factor"] = resize_factor
+        return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
+
+    monkeypatch.setattr(training_service, "run_training", fake_run_training)
+
+    training_service.compute_training(job_store, job.id, resize_factor=1)
+
+    # frame_count=830 would normally push resize_factor above 1 (see the
+    # downscale test above) - an explicit slider value must still win.
+    assert captured["resize_factor"] == 1
+
+
+def test_compute_training_writes_settings_json_to_running_stage(job_store, tmp_path, monkeypatch):
+    _patch_diagnostics(monkeypatch)
+    job = job_store.create_job("Test")
+    job_store.update_job(
+        job.id,
+        colmap_sparse_dir=str(tmp_path / "sparse" / "0"),
+        undistorted_images_dir=str(tmp_path / "images"),
+    )
+
+    def fake_run_training(data_path, output_dir, *, max_gaussians, iterations=None, bilateral_grid, resize_factor=1, eval=False, test_every=None, on_progress, on_process_start=None, on_log=None):
+        return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
+
+    monkeypatch.setattr(training_service, "run_training", fake_run_training)
+
+    training_service.compute_training(
+        job_store, job.id, variable_exposure=True, max_gaussians=1_500_000, iterations=15000,
+        resize_factor=2, eval=True, test_every=4,
+    )
+
+    stage = job_store.get_stage(job.id, "training")
+    settings = json.loads(stage.settings_json)
+    assert settings == {
+        "variable_exposure": True,
+        "max_gaussians": 1_500_000,
+        "iterations": 15000,
+        "resize_factor": 2,
+        "eval": True,
+        "test_every": 4,
+        "use_cloud": False,
+        "cloud_provider": None,
+        "cloud_image": None,
+        "cloud_gpu_type": None,
+    }
+
+
+def test_compute_training_rejects_cloud_without_image_or_gpu_type(job_store, tmp_path):
+    job = job_store.create_job("Test")
+    job_store.update_job(
+        job.id,
+        colmap_sparse_dir=str(tmp_path / "sparse" / "0"),
+        undistorted_images_dir=str(tmp_path / "images"),
+    )
+
+    with pytest.raises(training_service.TrainingError, match="image name and a GPU type"):
+        training_service.compute_training(job_store, job.id, use_cloud=True)
+
+    stage = job_store.get_stage(job.id, "training")
+    assert stage.status == "failed"
+
+
+def test_compute_training_dispatches_to_cloud_when_use_cloud(job_store, tmp_path, monkeypatch):
+    _patch_diagnostics(monkeypatch)
+    job = job_store.create_job("Test")
+    job_store.update_job(
+        job.id,
+        colmap_sparse_dir=str(tmp_path / "sparse" / "0"),
+        undistorted_images_dir=str(tmp_path / "images"),
+    )
+
+    captured = {}
+    local_run_training = MagicMock()
+
+    def fake_run_cloud_training(data_path, output_dir, *, provider, image_name, gpu_type_id, **kwargs):
+        captured["provider"] = provider
+        captured["image_name"] = image_name
+        captured["gpu_type_id"] = gpu_type_id
+        return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
+
+    monkeypatch.setattr(training_service, "run_cloud_training", fake_run_cloud_training)
+    monkeypatch.setattr(training_service, "run_training", local_run_training)
+
+    training_service.compute_training(
+        job_store, job.id, use_cloud=True, cloud_provider="vastai",
+        cloud_image="ghcr.io/example/lichtfeld:cuda", cloud_gpu_type="RTX_4090",
+    )
+
+    local_run_training.assert_not_called()
+    assert captured["provider"] == "vastai"
+    assert captured["image_name"] == "ghcr.io/example/lichtfeld:cuda"
+    assert captured["gpu_type_id"] == "RTX_4090"
+
+    stage = job_store.get_stage(job.id, "training")
+    settings = json.loads(stage.settings_json)
+    assert settings["use_cloud"] is True
+    assert settings["cloud_provider"] == "vastai"
+    assert settings["cloud_image"] == "ghcr.io/example/lichtfeld:cuda"
+    assert settings["cloud_gpu_type"] == "RTX_4090"
+
+
+def test_compute_training_cloud_error_marks_stage_failed(job_store, tmp_path, monkeypatch):
+    _patch_diagnostics(monkeypatch)
+    job = job_store.create_job("Test")
+    job_store.update_job(
+        job.id,
+        colmap_sparse_dir=str(tmp_path / "sparse" / "0"),
+        undistorted_images_dir=str(tmp_path / "images"),
+    )
+
+    monkeypatch.setattr(
+        training_service, "run_cloud_training", MagicMock(side_effect=LichtFeldError("no capacity"))
+    )
+
+    with pytest.raises(training_service.TrainingError, match="no capacity"):
+        training_service.compute_training(
+            job_store, job.id, use_cloud=True, cloud_provider="runpod",
+            cloud_image="img", cloud_gpu_type="gpu",
+        )
+
+    stage = job_store.get_stage(job.id, "training")
+    assert stage.status == "failed"
+    assert stage.error == "no capacity"
+
+
+def test_compute_training_forwards_eval_and_test_every(job_store, tmp_path, monkeypatch):
+    _patch_diagnostics(monkeypatch)
+    job = job_store.create_job("Test")
+    job_store.update_job(
+        job.id,
+        colmap_sparse_dir=str(tmp_path / "sparse" / "0"),
+        undistorted_images_dir=str(tmp_path / "images"),
+    )
+
+    captured = {}
+
+    def fake_run_training(data_path, output_dir, *, max_gaussians, iterations=None, bilateral_grid, resize_factor=1, eval=False, test_every=None, on_progress, on_process_start=None, on_log=None):
+        captured["eval"] = eval
+        captured["test_every"] = test_every
+        return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
+
+    monkeypatch.setattr(training_service, "run_training", fake_run_training)
+
+    training_service.compute_training(job_store, job.id, eval=True, test_every=4)
+
+    assert captured["eval"] is True
+    assert captured["test_every"] == 4
+
+
+def test_compute_training_writes_eval_metrics_json_when_present(job_store, tmp_path, monkeypatch):
+    _patch_diagnostics(monkeypatch)
+    job = job_store.create_job("Test")
+    job_store.update_job(
+        job.id,
+        colmap_sparse_dir=str(tmp_path / "sparse" / "0"),
+        undistorted_images_dir=str(tmp_path / "images"),
+    )
+
+    eval_metrics = [{"iteration": 7000, "psnr": 24.1, "ssim": 0.81, "time_per_image": 0.05, "num_gaussians": 812345}]
+
+    def fake_run_training(data_path, output_dir, *, max_gaussians, iterations=None, bilateral_grid, resize_factor=1, eval=False, test_every=None, on_progress, on_process_start=None, on_log=None):
+        return TrainingResult(splat_path=tmp_path / "result.ply", log="ok", eval_metrics=eval_metrics)
+
+    monkeypatch.setattr(training_service, "run_training", fake_run_training)
+
+    training_service.compute_training(job_store, job.id, eval=True)
+
+    stage = job_store.get_stage(job.id, "training")
+    assert json.loads(stage.eval_metrics_json) == eval_metrics
+
+
+def test_compute_training_eval_metrics_json_is_none_without_eval(job_store, tmp_path, monkeypatch):
+    _patch_diagnostics(monkeypatch)
+    job = job_store.create_job("Test")
+    job_store.update_job(
+        job.id,
+        colmap_sparse_dir=str(tmp_path / "sparse" / "0"),
+        undistorted_images_dir=str(tmp_path / "images"),
+    )
+
+    def fake_run_training(data_path, output_dir, *, max_gaussians, iterations=None, bilateral_grid, resize_factor=1, eval=False, test_every=None, on_progress, on_process_start=None, on_log=None):
+        return TrainingResult(splat_path=tmp_path / "result.ply", log="ok", eval_metrics=None)
+
+    monkeypatch.setattr(training_service, "run_training", fake_run_training)
+
+    training_service.compute_training(job_store, job.id)
+
+    stage = job_store.get_stage(job.id, "training")
+    assert stage.eval_metrics_json is None
 
 
 def test_compute_training_omits_max_gaussians_when_no_recommendation(job_store, tmp_path, monkeypatch):
@@ -247,7 +499,7 @@ def test_compute_training_omits_max_gaussians_when_no_recommendation(job_store, 
 
     captured = {}
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None, on_log=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, iterations=None, bilateral_grid, resize_factor=1, eval=False, test_every=None, on_progress, on_process_start=None, on_log=None):
         captured["max_gaussians"] = max_gaussians
         return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
 
@@ -267,7 +519,7 @@ def test_compute_training_forwards_progress_to_job_store(job_store, tmp_path, mo
         undistorted_images_dir=str(tmp_path / "images"),
     )
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None, on_log=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, iterations=None, bilateral_grid, resize_factor=1, eval=False, test_every=None, on_progress, on_process_start=None, on_log=None):
         on_progress(20.0)
         on_progress(80.0)
         return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
@@ -301,7 +553,7 @@ def test_compute_training_forwards_log_to_job_store(job_store, tmp_path, monkeyp
 
     monkeypatch.setattr(job_store, "upsert_stage", spy_upsert_stage)
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None, on_log=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, iterations=None, bilateral_grid, resize_factor=1, eval=False, test_every=None, on_progress, on_process_start=None, on_log=None):
         on_log("partial output so far")
         return TrainingResult(splat_path=tmp_path / "result.ply", log="final log")
 
@@ -323,7 +575,7 @@ def test_compute_training_passes_variable_exposure_as_bilateral_grid(job_store, 
 
     captured = {}
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None, on_log=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, iterations=None, bilateral_grid, resize_factor=1, eval=False, test_every=None, on_progress, on_process_start=None, on_log=None):
         captured["bilateral_grid"] = bilateral_grid
         return TrainingResult(splat_path=tmp_path / "result.ply", log="ok")
 
@@ -347,7 +599,7 @@ def test_compute_training_logs_metrics_on_success(job_store, tmp_path, monkeypat
         undistorted_images_dir=str(tmp_path / "images"),
     )
 
-    def fake_run_training(data_path, output_dir, *, max_gaussians, bilateral_grid, resize_factor=1, on_progress, on_process_start=None, on_log=None):
+    def fake_run_training(data_path, output_dir, *, max_gaussians, iterations=None, bilateral_grid, resize_factor=1, eval=False, test_every=None, on_progress, on_process_start=None, on_log=None):
         on_progress(50.0)
         on_progress(100.0)
         return TrainingResult(splat_path=tmp_path / "result.ply", log="Final splats: 4800000")

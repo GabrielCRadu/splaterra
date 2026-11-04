@@ -13,8 +13,8 @@ try:
 except LichtFeldError:
     _LICHTFELD_AVAILABLE = False
 
-_OPTED_IN = os.environ.get("SPLATPREP_RUN_REAL_LICHTFELD_TEST") == "1"
-_ALIGNMENT_FIXTURE_DIR = os.environ.get("SPLATPREP_E2E_ALIGNMENT_DIR")
+_OPTED_IN = os.environ.get("SPLATERRA_RUN_REAL_LICHTFELD_TEST") == "1"
+_ALIGNMENT_FIXTURE_DIR = os.environ.get("SPLATERRA_E2E_ALIGNMENT_DIR")
 
 
 def _alignment_fixture_is_valid() -> bool:
@@ -36,11 +36,11 @@ def _alignment_fixture_is_valid() -> bool:
         "Real LichtFeld training test skipped by default - a full headless training run can "
         "take a very long time (up to the 2-hour default timeout) and this codebase has never "
         "observed a real training run's stdout/output format. To run it deliberately: install "
-        "LichtFeld Studio (or set SPLATPREP_LICHTFELD_DIR), set a real, previously-completed "
+        "LichtFeld Studio (or set SPLATERRA_LICHTFELD_DIR), set a real, previously-completed "
         "COLMAP alignment output's root directory (containing sparse/0/*.txt and images/) as "
-        "SPLATPREP_E2E_ALIGNMENT_DIR - synthetic ffmpeg testsrc footage does not produce a "
+        "SPLATERRA_E2E_ALIGNMENT_DIR - synthetic ffmpeg testsrc footage does not produce a "
         "valid reconstruction, so this cannot be auto-generated like the other e2e tests - and "
-        "set SPLATPREP_RUN_REAL_LICHTFELD_TEST=1."
+        "set SPLATERRA_RUN_REAL_LICHTFELD_TEST=1."
     ),
 )
 def test_real_training_run_against_prior_alignment_output(client, tmp_path):

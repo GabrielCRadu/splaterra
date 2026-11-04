@@ -36,6 +36,36 @@ def test_complete_upload_fails_when_chunks_missing(job_store):
         complete_upload(job_store, job.id, upload_id)
 
 
+def test_complete_upload_disk_full_during_reassembly_records_failed_stage(job_store, monkeypatch):
+    # Real incident: reassembling a large chunked upload ran the destination
+    # drive out of space partway through - output.write() raised OSError
+    # with nothing catching it, leaving the stage stuck on "running" forever
+    # (see app/uploads.py's comment on this exact fix).
+    from pathlib import Path
+
+    job = job_store.create_job("Test")
+    upload_id = start_upload(job.id, "video.mp4", total_chunks=3)
+    save_chunk(job.id, upload_id, 0, b"AAA")
+    save_chunk(job.id, upload_id, 1, b"BBB")
+    save_chunk(job.id, upload_id, 2, b"CCC")
+
+    real_read_bytes = Path.read_bytes
+
+    def flaky_read_bytes(self):
+        if self.name == "000001.part":
+            raise OSError(28, "No space left on device")
+        return real_read_bytes(self)
+
+    monkeypatch.setattr(Path, "read_bytes", flaky_read_bytes)
+
+    with pytest.raises(UploadError, match="Failed to reassemble upload"):
+        complete_upload(job_store, job.id, upload_id)
+
+    stage = job_store.get_stage(job.id, "ingestion")
+    assert stage.status == "failed"
+    assert "No space left on device" in stage.error
+
+
 def test_save_chunk_unknown_upload_raises(job_store):
     job = job_store.create_job("Test")
     with pytest.raises(UploadError):
@@ -89,3 +119,15 @@ def test_start_upload_accepts_normal_filename(job_store):
     destination = complete_upload(job_store, job.id, upload_id)
     assert destination.name == "video.mp4"
     assert destination.read_bytes() == b"AAA"
+
+
+def test_start_upload_rejects_osv_extension(job_store):
+    job = job_store.create_job("Test", device_type="dji_avata_360")
+    with pytest.raises(UploadError, match="OSV"):
+        start_upload(job.id, "clip.OSV", total_chunks=1)
+
+
+def test_start_upload_rejects_osv_extension_case_insensitive(job_store):
+    job = job_store.create_job("Test", device_type="dji_avata_360")
+    with pytest.raises(UploadError, match="OSV"):
+        start_upload(job.id, "clip.osv", total_chunks=1)

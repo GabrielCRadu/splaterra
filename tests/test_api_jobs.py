@@ -103,6 +103,29 @@ def test_delete_job_removes_job_and_its_files(client):
     assert not directory.exists()
 
 
+def test_delete_job_succeeds_even_if_directory_removal_fails(client, monkeypatch):
+    # A locked file (open download, antivirus scan, etc.) on Windows must not
+    # turn "delete succeeded" (the DB record - what the job list reflects -
+    # is already gone) into an unhandled 500.
+    from app.api import jobs as jobs_api
+    from app.paths import job_dir
+
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+    directory = job_dir(job_id)
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "marker.txt").write_text("data")
+
+    def fake_rmtree(path):
+        raise PermissionError("file in use")
+
+    monkeypatch.setattr(jobs_api.shutil, "rmtree", fake_rmtree)
+
+    response = client.delete(f"/jobs/{job_id}")
+
+    assert response.status_code == 204
+    assert client.get(f"/jobs/{job_id}").status_code == 404
+
+
 def test_delete_job_unknown_returns_404(client):
     response = client.delete("/jobs/does-not-exist")
     assert response.status_code == 404

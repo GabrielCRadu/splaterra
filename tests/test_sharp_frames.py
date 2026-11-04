@@ -25,6 +25,28 @@ def _fake_popen(stdout_text: str, returncode: int = 0) -> MagicMock:
     return process
 
 
+def test_run_extraction_forces_utf8_decoding(tmp_path, monkeypatch):
+    # Windows' text=True otherwise falls back to the console codepage
+    # (cp1252 etc.), which can raise UnicodeDecodeError inside the reader
+    # thread on non-ASCII subprocess output.
+    monkeypatch.setattr(sharp_frames.shutil, "which", lambda name: "/usr/bin/sharp-frames")
+    output_dir = tmp_path / "out"
+    captured = {}
+
+    def fake_popen(command, **kwargs):
+        captured["kwargs"] = kwargs
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "frame_0001.jpg").write_bytes(b"fake")
+        return _fake_popen("done\n", returncode=0)
+
+    monkeypatch.setattr(sharp_frames.subprocess, "Popen", fake_popen)
+
+    sharp_frames.run_extraction(tmp_path / "video.mp4", output_dir)
+
+    assert captured["kwargs"]["encoding"] == "utf-8"
+    assert captured["kwargs"]["errors"] == "replace"
+
+
 def test_run_extraction_raises_when_binary_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(sharp_frames.shutil, "which", lambda name: None)
     with pytest.raises(sharp_frames.SharpFramesError, match="not found on PATH"):
@@ -36,7 +58,7 @@ def test_run_extraction_returns_frames_on_success(tmp_path, monkeypatch):
 
     output_dir = tmp_path / "out"
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "frame_0001.jpg").write_bytes(b"fake")
         (output_dir / "frame_0002.jpg").write_bytes(b"fake")
@@ -56,7 +78,7 @@ def test_run_extraction_calls_on_process_start_with_the_popen_object(tmp_path, m
     output_dir = tmp_path / "out"
     fake_process = _fake_popen("done\n", returncode=0)
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "frame_0001.jpg").write_bytes(b"fake")
         return fake_process
@@ -76,7 +98,7 @@ def test_run_extraction_calls_on_log_with_accumulated_output(tmp_path, monkeypat
 
     output_dir = tmp_path / "out"
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "frame_0001.jpg").write_bytes(b"fake")
         return _fake_popen("line one\nline two", returncode=0)
@@ -109,7 +131,7 @@ def test_run_extraction_pins_batch_flags_for_batched_method(tmp_path, monkeypatc
     output_dir = tmp_path / "out"
     captured: dict = {}
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         captured["command"] = command
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "frame_0001.jpg").write_bytes(b"fake")
@@ -130,7 +152,7 @@ def test_run_extraction_omits_batch_flags_for_best_n_method(tmp_path, monkeypatc
     output_dir = tmp_path / "out"
     captured: dict = {}
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         captured["command"] = command
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "frame_0001.jpg").write_bytes(b"fake")
@@ -159,7 +181,7 @@ def test_run_extraction_reports_progress_from_tqdm_style_output(tmp_path, monkey
         "Calculating sharpness for frames: 100%|##| 10/10\n"
     )
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "frame_0001.jpg").write_bytes(b"fake")
         return _fake_popen(fake_output, returncode=0)
@@ -177,7 +199,7 @@ def test_run_extraction_reports_progress_from_tqdm_style_output(tmp_path, monkey
 def test_run_extraction_raises_on_nonzero_exit(tmp_path, monkeypatch):
     monkeypatch.setattr(sharp_frames.shutil, "which", lambda name: "/usr/bin/sharp-frames")
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         return _fake_popen("ffmpeg not found\n", returncode=1)
 
     monkeypatch.setattr(sharp_frames.subprocess, "Popen", fake_popen)
@@ -189,7 +211,7 @@ def test_run_extraction_raises_on_nonzero_exit(tmp_path, monkeypatch):
 def test_run_extraction_raises_when_no_frames_produced(tmp_path, monkeypatch):
     monkeypatch.setattr(sharp_frames.shutil, "which", lambda name: "/usr/bin/sharp-frames")
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         return _fake_popen("done\n", returncode=0)
 
     monkeypatch.setattr(sharp_frames.subprocess, "Popen", fake_popen)
@@ -200,6 +222,10 @@ def test_run_extraction_raises_when_no_frames_produced(tmp_path, monkeypatch):
 
 def test_run_extraction_raises_on_timeout(tmp_path, monkeypatch):
     monkeypatch.setattr(sharp_frames.shutil, "which", lambda name: "/usr/bin/sharp-frames")
+    # kill_process_tree talks to the real OS via psutil.Process(pid) - not
+    # meaningful against a MagicMock's fake pid, and already covered for real
+    # in tests/test_process_kill.py.
+    monkeypatch.setattr(sharp_frames, "kill_process_tree", MagicMock())
 
     # A stream that never reaches EOF, simulating a hung process. The reader
     # thread is daemon=True so it won't block the test process from exiting,
@@ -221,7 +247,7 @@ def test_run_extraction_raises_on_timeout(tmp_path, monkeypatch):
             _REAL_SLEEP(0.01)
             return " "  # never "" (EOF), never \r or \n - buffers forever
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         process = MagicMock()
         process.stdout = HangingStdout()
         process.kill = MagicMock()

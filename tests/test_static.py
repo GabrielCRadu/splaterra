@@ -12,7 +12,7 @@ def test_jobs_api_still_works_after_static_mount(client):
 def test_static_index_page_served(client):
     response = client.get("/")
     assert response.status_code == 200
-    assert "Splat Prep" in response.text
+    assert "Splaterra" in response.text
 
 
 def test_static_css_served(client):

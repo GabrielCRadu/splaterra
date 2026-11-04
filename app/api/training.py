@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from app import process_registry
-from app.deps import get_job_store, run_with_new_store
+from app.deps import cancel_or_force_fail, claim_stage_or_409, get_job_store, run_with_new_store
 from app.job_store import JobStore
 from app.training_service import compute_training
 
@@ -16,6 +16,19 @@ router = APIRouter(prefix="/jobs", tags=["training"])
 
 class TrainRequest(BaseModel):
     variable_exposure: bool = False
+    max_gaussians: int | None = Field(default=None, gt=0)
+    iterations: int | None = Field(default=None, gt=0)
+    resize_factor: Literal[1, 2, 4, 8] | None = None
+    eval: bool = False
+    test_every: int | None = Field(default=None, gt=0)
+    # UNVERIFIED against a real RunPod/vast.ai account - see docs/TODO.md.
+    # image_name/gpu_type are required when use_cloud is set (checked in
+    # app/training_service.py, not here, since the requirement is
+    # conditional on use_cloud rather than a fixed field constraint).
+    use_cloud: bool = False
+    cloud_provider: Literal["runpod", "vastai"] = "runpod"
+    cloud_image: str | None = None
+    cloud_gpu_type: str | None = None
 
 
 @router.post("/{job_id}/train", status_code=202)
@@ -27,17 +40,21 @@ def train_endpoint(
 ) -> dict[str, str]:
     if store.get_job(job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    stage = store.get_stage(job_id, "training")
-    if stage is not None and stage.status == "running":
-        # Real bug this guards against: a stale/cached job.html page (or a
-        # second tab, or a fast double-tap) can fire a second /train while
-        # one is already in flight - process_registry only tracks one
-        # subprocess per (job_id, stage), so the second registration
-        # silently overwrites the first, orphaning it from ever being
-        # cancelable while it keeps consuming GPU/VRAM in the background.
-        raise HTTPException(status_code=409, detail="Training is already running for this job")
+    claim_stage_or_409(store, job_id, "training", "Training is already running for this job")
     background_tasks.add_task(
-        run_with_new_store, compute_training, job_id, variable_exposure=body.variable_exposure
+        run_with_new_store,
+        compute_training,
+        job_id,
+        variable_exposure=body.variable_exposure,
+        max_gaussians=body.max_gaussians,
+        iterations=body.iterations,
+        resize_factor=body.resize_factor,
+        eval=body.eval,
+        test_every=body.test_every,
+        use_cloud=body.use_cloud,
+        cloud_provider=body.cloud_provider,
+        cloud_image=body.cloud_image,
+        cloud_gpu_type=body.cloud_gpu_type,
     )
     return {"status": "started"}
 
@@ -48,7 +65,7 @@ def cancel_train_endpoint(
 ) -> dict[str, bool]:
     if store.get_job(job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    return {"cancelled": process_registry.cancel(job_id, "training")}
+    return {"cancelled": cancel_or_force_fail(store, job_id, "training")}
 
 
 @router.get("/{job_id}/training")

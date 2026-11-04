@@ -3,6 +3,8 @@ from __future__ import annotations
 import subprocess
 import threading
 
+from app.process_kill import kill_process_tree
+
 # Background tasks (alignment, training) run in-process via FastAPI's thread
 # pool, not as separate worker processes, so a plain in-memory dict shared
 # across threads is enough to let a cancel request reach the right
@@ -31,7 +33,7 @@ def cancel(job_id: str, stage: str) -> bool:
         if process is None or process.poll() is not None:
             return False
         _cancelled.add((job_id, stage))
-        process.kill()
+        kill_process_tree(process)
         return True
 
 

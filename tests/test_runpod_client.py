@@ -3,7 +3,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from app import runpod_client
-from app.runpod_client import PodConnection, RunPodError
+from app.remote_exec import PodConnection
+from app.runpod_client import RunPodError
 
 
 def test_create_gpu_pod_raises_without_api_key(monkeypatch):

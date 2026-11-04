@@ -3,10 +3,19 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Job — Splat Prep</title>
+<title>Job — Splaterra</title>
 <link rel="stylesheet" href="/css/app.css" />
+<link rel="manifest" href="/manifest.json" />
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#050506" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Splaterra" />
 </head>
 <body>
+<a class="brand-logo-link" href="/" aria-label="Splaterra - meniu principal"><img class="brand-logo" src="/brand/logo-splaterra.svg" alt="Splaterra" /></a>
 <a class="home-link" href="/" aria-label="Toate scanarile">&larr; Toate scanarile</a>
 <h1 id="job-name">...</h1>
 <p class="subtitle" id="job-meta"></p>
@@ -23,14 +32,15 @@
         Clipul trebuie stitch-uit deja in DJI Studio (export echirectangular) inainte sa il
         incarci aici — aplicatia nu proceseaza fisiere .OSV brute.
       </p>
-      <div class="job-meta" style="margin-bottom:8px;">Clipuri video ingerate</div>
+      <div class="settings-label" style="margin-bottom:8px;">Clipuri video ingerate</div>
       <div id="raw-videos-list"></div>
-      <div class="job-meta" style="margin:12px 0 8px;">Adauga clip</div>
+      <div class="settings-label" style="margin:12px 0 8px;">Adauga clip</div>
       <input type="file" id="add-clip-file-input" accept="video/*" multiple />
       <button class="btn-ghost" id="btn-add-clip-upload" type="button" style="margin-top:8px;">Incarca</button>
       <p class="subtitle" id="add-clip-status" style="margin:8px 0 0;"></p>
       <div id="add-clip-upload-list"></div>
       <button class="btn" id="btn-ingestion-continue" type="button" style="display:none; margin-top:16px;">Continua la extragere cadre</button>
+      <button class="btn-danger" id="btn-cancel-ingest" style="display:none; margin-top:16px;" type="button">Opreste ingestia</button>
     </div>
 
     <div class="story-slide" data-stage="frame_extraction">
@@ -38,37 +48,67 @@
       <div class="story-slide-status" id="slide-status-frame_extraction"></div>
       <div id="extract-standard-settings">
         <p class="subtitle" id="video-info-hint" style="margin:0 0 12px;"></p>
-        <label class="settings-label" for="extract-fps">Cadre pe secunda esantionate (fps)</label>
-        <input type="text" inputmode="numeric" id="extract-fps" />
-        <label class="settings-label" for="extract-method">Metoda de selectie</label>
-        <select id="extract-method">
-          <option value="best-n">Cele mai clare (best-n)</option>
-          <option value="percent">Procent din cadre (cele mai clare, distribuite uniform)</option>
-          <option value="batched">Pe loturi (batched)</option>
-          <option value="outlier-removal">Elimina cadre neclare (outlier-removal)</option>
-        </select>
-        <div id="extract-num-frames-row">
-          <label class="settings-label" for="extract-num-frames">Numar cadre finale (cele mai clare)</label>
-          <input type="text" inputmode="numeric" id="extract-num-frames" />
+        <div id="extract-standard-editable">
+          <label class="settings-label" for="extract-fps">Cadre pe secunda esantionate (fps)</label>
+          <input type="text" inputmode="numeric" id="extract-fps" />
+          <label class="settings-label" for="extract-method">Metoda de selectie</label>
+          <select id="extract-method">
+            <option value="best-n">Cele mai clare (best-n)</option>
+            <option value="percent">Procent din cadre (cele mai clare, distribuite uniform)</option>
+            <option value="batched">Pe loturi (batched)</option>
+            <option value="outlier-removal">Elimina cadre neclare (outlier-removal)</option>
+          </select>
+          <div id="extract-num-frames-row">
+            <label class="settings-label" for="extract-num-frames">Numar cadre finale (cele mai clare)</label>
+            <input type="text" inputmode="numeric" id="extract-num-frames" />
+          </div>
+          <div id="extract-percent-row" style="display:none;">
+            <label class="settings-label" for="extract-percent">Procent din cadrele esantionate</label>
+            <input type="text" inputmode="numeric" id="extract-percent" value="50" />
+          </div>
+          <p class="subtitle" id="extract-settings-hint" style="margin:8px 0 12px;"></p>
         </div>
-        <div id="extract-percent-row" style="display:none;">
-          <label class="settings-label" for="extract-percent">Procent din cadrele esantionate</label>
-          <input type="text" inputmode="numeric" id="extract-percent" value="50" />
+        <div id="extract-standard-locked" style="display:none; margin-bottom:12px;">
+          <div class="job-meta" id="extract-standard-locked-summary"></div>
         </div>
-        <p class="subtitle" id="extract-settings-hint" style="margin:8px 0 12px;"></p>
         <p class="subtitle" id="recommend-status" style="margin:0 0 8px;"></p>
         <a class="btn-ghost" id="link-recommendation" style="display:none;">Vezi recomandarea</a>
         <button class="btn-ghost" id="btn-recommend" style="display:none;">Calculeaza recomandare</button>
       </div>
       <div id="extract-360-settings" style="display:none;">
-        <label class="settings-label" for="extract-360-interval">Interval intre cadre (secunde)</label>
-        <input type="text" inputmode="numeric" id="extract-360-interval" value="1.0" />
-        <label class="checkbox-row" for="extract-360-ai-mask" style="margin-bottom:12px;">
-          <input type="checkbox" id="extract-360-ai-mask" />
-          Elimina operatorul/subiectii nedoriti din cadru (AI)
-        </label>
+        <div id="extract-360-editable">
+          <label class="settings-label" for="extract-360-interval">Interval intre cadre (secunde)</label>
+          <input type="text" inputmode="numeric" id="extract-360-interval" value="1.0" />
+          <label class="settings-label" for="extract-360-layout">Aranjament camere virtuale</label>
+          <select id="extract-360-layout">
+            <option value="cube">Cub (6 camere fixe, cea mai predictibila acoperire)</option>
+            <option value="ring">Inel (distribuite pe orizont)</option>
+            <option value="fibonacci">Fibonacci (distribuite uniform pe sfera)</option>
+          </select>
+          <div id="extract-360-camera-count-row" style="display:none;">
+            <label class="settings-label" for="extract-360-camera-count">Numar camere virtuale</label>
+            <input type="text" inputmode="numeric" id="extract-360-camera-count" value="6" />
+          </div>
+          <label class="settings-label" for="extract-360-resolution">Rezolutie imagini extrase (px)</label>
+          <input type="text" inputmode="numeric" id="extract-360-resolution" value="2048" />
+          <label class="checkbox-row" for="extract-360-nadir-mask" id="extract-360-nadir-mask-row" style="margin-bottom:12px;">
+            <input type="checkbox" id="extract-360-nadir-mask" />
+            Masca peste polul/trepiedul din centrul cadrului orientat in jos (fara AI)
+          </label>
+          <label class="checkbox-row" for="extract-360-ai-mask" style="margin-bottom:12px;">
+            <input type="checkbox" id="extract-360-ai-mask" />
+            Elimina operatorul/subiectii nedoriti din cadru (AI)
+          </label>
+          <label class="checkbox-row" for="extract-360-skip-up" id="extract-360-skip-up-row" style="margin-bottom:12px;">
+            <input type="checkbox" id="extract-360-skip-up" />
+            Omite cadrele orientate in sus (de obicei doar cer)
+          </label>
+        </div>
+        <div id="extract-360-locked" style="display:none; margin-bottom:12px;">
+          <div class="job-meta" id="extract-360-locked-summary"></div>
+        </div>
       </div>
-      <button class="btn" id="btn-extract" style="display:none; margin-top:10px;">Extrage cadre</button>
+      <button class="btn" id="btn-extract" style="display:none; margin-top:10px;">Porneste extragerea cadrelor</button>
       <button class="btn-danger" id="btn-cancel-extract" style="display:none; margin-top:10px;" type="button">Opreste extragerea</button>
       <div id="import-frames-panel" style="display:none; margin-top:12px;">
         <div class="job-meta" style="margin-bottom:8px;">Ai deja cadre extrase?</div>
@@ -89,10 +129,76 @@
     <div class="story-slide" data-stage="training">
       <div class="story-slide-title">Antrenare</div>
       <div class="story-slide-status" id="slide-status-training"></div>
-      <label class="checkbox-row" for="train-variable-exposure" style="margin-bottom:12px;">
-        <input type="checkbox" id="train-variable-exposure" />
-        Expunerea/balansul de alb variaza intre cadre (nu e fixat pe camera)
-      </label>
+      <div id="train-editable-settings">
+        <div class="settings-label-row">
+          <label class="settings-label" for="train-max-gaussians">Numar maxim de gaussieni</label>
+          <span class="settings-value" id="train-max-gaussians-value"></span>
+        </div>
+        <input type="range" id="train-max-gaussians" min="500000" max="6000000" step="100000" />
+        <p class="subtitle" id="train-max-gaussians-hint" style="margin:0 0 12px;"></p>
+        <div class="settings-label-row">
+          <label class="settings-label" for="train-iterations">Iteratii</label>
+          <span class="settings-value" id="train-iterations-value"></span>
+        </div>
+        <input type="range" id="train-iterations" min="5000" max="50000" step="1000" />
+        <p class="subtitle" id="train-iterations-hint" style="margin:0 0 12px;">Implicit LichtFeld: 30.000.</p>
+        <div class="settings-label-row">
+          <label class="settings-label" for="train-resize-factor">Redimensionare imagini</label>
+          <span class="settings-value" id="train-resize-factor-value"></span>
+        </div>
+        <input type="range" id="train-resize-factor" min="0" max="4" step="1" value="0" />
+        <p class="subtitle" id="train-resize-factor-hint" style="margin:0 0 12px;">
+          Implicit: automat, calculat dupa numarul de cadre. Reduce rezolutia imaginilor la antrenare
+          (nu numarul de gaussieni) pentru a evita CUDA OOM pe seturi mari.
+        </p>
+        <label class="checkbox-row" for="train-variable-exposure" style="margin-bottom:12px;">
+          <input type="checkbox" id="train-variable-exposure" />
+          Expunerea/balansul de alb variaza intre cadre (nu e fixat pe camera)
+        </label>
+        <label class="checkbox-row" for="train-eval" style="margin-bottom:12px;">
+          <input type="checkbox" id="train-eval" />
+          Masoara calitatea obiectiv (PSNR/SSIM pe cadre tinute deoparte)
+        </label>
+        <div id="train-test-every-row" style="display:none;">
+          <label class="settings-label" for="train-test-every">Foloseste ca test fiecare al N-lea cadru</label>
+          <input type="text" inputmode="numeric" id="train-test-every" value="8" />
+          <p class="subtitle" style="margin:4px 0 12px;">
+            Implicit LichtFeld: 8. Evaluarea ruleaza la iteratiile 7.000 si 30.000 (fixe in LichtFeld,
+            nu configurabile) — daca alegi mai putine iteratii decat 30.000, s-ar putea sa vezi
+            rezultate doar la prima evaluare.
+          </p>
+        </div>
+        <label class="checkbox-row" for="train-use-cloud" style="margin-bottom:12px;">
+          <input type="checkbox" id="train-use-cloud" />
+          Antreneaza in cloud (RunPod / vast.ai) — experimental, neverificat pe cont real
+        </label>
+        <div id="train-cloud-settings" style="display:none;">
+          <label class="settings-label" for="train-cloud-provider">Provider</label>
+          <select id="train-cloud-provider">
+            <option value="runpod">RunPod</option>
+            <option value="vastai">vast.ai</option>
+          </select>
+          <label class="settings-label" for="train-cloud-image">Imagine Docker (cu LichtFeld-Studio preinstalat)</label>
+          <input type="text" id="train-cloud-image" placeholder="ex. ghcr.io/tine/lichtfeld:cuda" />
+          <label class="settings-label" for="train-cloud-gpu-type">Tip GPU</label>
+          <input type="text" id="train-cloud-gpu-type" placeholder="RunPod: ex. NVIDIA GeForce RTX 4090. vast.ai: nume GPU (ex. RTX_4090) sau id de offer." />
+          <p class="subtitle" style="margin:8px 0 12px;">
+            Neverificat inca pe un cont real — implementat dupa documentatia publica a fiecarui
+            provider. Trebuie sa ai deja construita si publicata o imagine Docker cu LichtFeld-Studio
+            instalat; aplicatia nu o construieste. Anularea din UI nu opreste rularea de pe pod-ul
+            remote — opreste-l manual din dashboard-ul providerului daca e nevoie.
+          </p>
+        </div>
+      </div>
+      <div id="train-locked-settings" style="display:none; margin-bottom:12px;">
+        <div class="job-meta" id="train-locked-gaussians"></div>
+        <div class="job-meta" id="train-locked-iterations"></div>
+        <div class="job-meta" id="train-locked-resize"></div>
+        <div class="job-meta" id="train-locked-exposure"></div>
+        <div class="job-meta" id="train-locked-eval"></div>
+        <div class="job-meta" id="train-locked-cloud"></div>
+      </div>
+      <div id="train-eval-results" style="display:none; margin-bottom:12px;"></div>
       <button class="btn" id="btn-train" style="display:none;">Porneste antrenarea</button>
       <button class="btn-danger" id="btn-cancel-train" style="display:none;" type="button">Opreste antrenarea</button>
       <a class="btn-ghost" id="link-training" style="display:none;" download>Descarca splat-ul</a>
@@ -108,7 +214,8 @@
         <option value="ply">PLY (original, fara compresie)</option>
         <option value="html">HTML (viewer de sine statator)</option>
       </select>
-      <button class="btn" id="btn-export" type="button" style="margin-top:8px;">Exporta</button>
+      <button class="btn" id="btn-export" type="button" style="display:none; margin-top:8px;">Exporta</button>
+      <button class="btn-danger" id="btn-cancel-export" style="display:none; margin-top:8px;" type="button">Opreste exportul</button>
       <a class="btn-ghost" id="link-export" style="display:none; margin-top:8px;" download>Descarca exportul</a>
     </div>
 
@@ -124,18 +231,21 @@
   <div class="usage-row"><span class="job-meta">VRAM</span><span id="usage-vram">—</span></div>
 </div>
 
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal-card">
+    <div class="modal-title" id="confirm-modal-title"></div>
+    <div class="modal-body" id="confirm-modal-text"></div>
+    <div class="modal-actions">
+      <button class="btn-danger" id="confirm-modal-confirm-btn">Opreste</button>
+      <button class="btn-ghost" id="confirm-modal-cancel-btn">Inapoi</button>
+    </div>
+  </div>
+</div>
+
 <script src="/js/app.js"></script>
 <script>
   const jobId = jobIdFromQuery();
   const STORIES = ["ingestion", "frame_extraction", "alignment", "training", "export"];
-  const STAGE_LABELS = {
-    ingestion: "Ingestie",
-    frame_extraction: "Extragere cadre",
-    alignment: "Alignment",
-    recommendation: "Recomandare",
-    training: "Antrenare",
-    export: "Export",
-  };
 
   let lastStages = [];
   let viewedIndex = 0;
@@ -146,6 +256,10 @@
   let deviceType = "standard";
   const lastStatusByStage = {};
   const expandedLogs = new Set();
+  // Stages that finished ("done"/"failed") while a different slide was being
+  // viewed, not yet acknowledged by the user navigating to them - lets
+  // renderBackgroundBanner flag a completion, not just an in-progress run.
+  const backgroundCompletions = {};
 
   function stageStatus(stages, name) {
     const stage = stages.find((s) => s.stage === name);
@@ -218,11 +332,16 @@
         s.status === "done" ? "pill-green" : s.status === "failed" ? "pill-orange" : "pill-gray";
       const errorLine = s.error ? `<div class="job-meta">${escapeHtml(s.error)}</div>` : "";
       container.innerHTML = `
-        <span class="pill ${pillClass}">${s.status}</span>
+        <span class="pill ${pillClass}">${STATUS_LABELS[s.status] || s.status}</span>
         ${errorLine}
         ${progressBarHtml(s)}
         ${logPanelHtml(s)}
       `;
+      // innerHTML replaces the <pre> node every render (polling tick or
+      // toggle open), so scroll position never persists on its own - jump to
+      // the newest output each time instead of leaving it at the top.
+      const logEl = container.querySelector(".log-output");
+      if (logEl) logEl.scrollTop = logEl.scrollHeight;
     });
 
     const recommendStage = stages.find((s) => s.stage === "recommendation");
@@ -262,13 +381,30 @@
     const runningIndex = STORIES.findIndex(
       (stage, i) => i !== viewedIndex && stageStatus(stages, stage) === "running"
     );
-    if (runningIndex === -1) {
-      banner.style.display = "none";
+    if (runningIndex !== -1) {
+      // An actively-running stage takes priority over a stale completion
+      // notice from an earlier stage.
+      banner.style.display = "flex";
+      banner.classList.remove("story-banner-done");
+      banner.textContent = `${STAGE_LABELS[STORIES[runningIndex]]} ruleaza in fundal — atinge ca sa vezi`;
+      banner.onclick = () => goToSlide(runningIndex, { isUserAction: true });
       return;
     }
-    banner.style.display = "flex";
-    banner.textContent = `${STAGE_LABELS[STORIES[runningIndex]]} ruleaza in fundal — atinge ca sa vezi`;
-    banner.onclick = () => goToSlide(runningIndex, { isUserAction: true });
+
+    const completedStage = STORIES.find((stage) => backgroundCompletions[stage]);
+    if (completedStage) {
+      const status = backgroundCompletions[completedStage];
+      banner.style.display = "flex";
+      banner.classList.toggle("story-banner-done", status === "done");
+      banner.textContent =
+        status === "done"
+          ? `${STAGE_LABELS[completedStage]} finalizat — atinge ca sa vezi`
+          : `${STAGE_LABELS[completedStage]} a esuat — atinge ca sa vezi`;
+      banner.onclick = () => goToSlide(STORIES.indexOf(completedStage), { isUserAction: true });
+      return;
+    }
+
+    banner.style.display = "none";
   }
 
   function applyTrackTransform() {
@@ -278,6 +414,10 @@
   function goToSlide(index, opts) {
     opts = opts || {};
     viewedIndex = Math.max(0, Math.min(index, reachableIndexCache));
+    // Viewing a slide acknowledges any pending background-completion notice
+    // for it, regardless of how the user got there (banner tap, story-bar
+    // dot, swipe) - they've now seen the result directly.
+    delete backgroundCompletions[STORIES[viewedIndex]];
     if (opts.isUserAction) {
       userNavigated = viewedIndex !== reachableIndexCache;
     } else if (viewedIndex === reachableIndexCache) {
@@ -314,7 +454,16 @@
     }
 
     STORIES.forEach((stage) => {
-      lastStatusByStage[stage] = stageStatus(stages, stage);
+      const stagePrevStatus = lastStatusByStage[stage];
+      const stageNewStatus = stageStatus(stages, stage);
+      if (
+        stage !== currentStage &&
+        stagePrevStatus === "running" &&
+        (stageNewStatus === "done" || stageNewStatus === "failed")
+      ) {
+        backgroundCompletions[stage] = stageNewStatus;
+      }
+      lastStatusByStage[stage] = stageNewStatus;
     });
   }
 
@@ -341,6 +490,7 @@
 
   function updateActions(stages) {
     const ingestionDone = stageStatus(stages, "ingestion") === "done";
+    const ingestionRunning = stageStatus(stages, "ingestion") === "running";
     const extractionDone = stageStatus(stages, "frame_extraction") === "done";
     const extractionRunning = stageStatus(stages, "frame_extraction") === "running";
     const alignmentDone = stageStatus(stages, "alignment") === "done";
@@ -354,6 +504,7 @@
     document.getElementById("btn-cancel-extract").style.display = extractionRunning ? "block" : "none";
     document.getElementById("btn-ingestion-continue").style.display =
       ingestionDone && !extractionDone ? "block" : "none";
+    document.getElementById("btn-cancel-ingest").style.display = ingestionRunning ? "block" : "none";
     document.getElementById("import-frames-panel").style.display = !extractionDone ? "block" : "none";
 
     const framesLink = document.getElementById("link-frames");
@@ -387,6 +538,11 @@
     trainingLink.href = `/jobs/${jobId}/training/download`;
 
     const exportDone = stageStatus(stages, "export") === "done";
+    const exportRunning = stageStatus(stages, "export") === "running";
+    document.getElementById("btn-export").style.display =
+      trainingDone && !exportDone && !exportRunning ? "block" : "none";
+    document.getElementById("btn-cancel-export").style.display = exportRunning ? "block" : "none";
+
     const exportLink = document.getElementById("link-export");
     exportLink.style.display = exportDone ? "block" : "none";
     exportLink.href = `/jobs/${jobId}/export/download`;
@@ -408,6 +564,8 @@
     checkAutoAdvance(stages);
     renderAllSlideStatuses(stages);
     updateActions(stages);
+    updateExtractionSettingsLock(stages);
+    updateTrainSettingsLock(stages);
     renderStoryBar(stages);
     renderBackgroundBanner(stages);
     applyTrackTransform();
@@ -420,6 +578,126 @@
     document.getElementById("extract-360-settings").style.display = is360 ? "block" : "none";
   }
 
+  // Once a stage has actually been submitted (running or done), its settings
+  // inputs stop reflecting reality on refresh - they silently reset to
+  // defaults while job_stages.settings_json holds what was really used. A
+  // "failed" stage stays editable (the natural retry path), matching how
+  // btn-train/btn-extract already reappear on failure.
+  function parseSettingsJson(stage) {
+    if (!stage || !stage.settings_json) return null;
+    try {
+      return JSON.parse(stage.settings_json);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function updateExtractionSettingsLock(stages) {
+    const stage = stages.find((s) => s.stage === "frame_extraction");
+    const locked = !!stage && (stage.status === "running" || stage.status === "done");
+    const settings = locked ? parseSettingsJson(stage) : null;
+    const is360 = deviceType !== "standard";
+
+    document.getElementById("extract-standard-editable").style.display = locked ? "none" : "block";
+    document.getElementById("extract-standard-locked").style.display =
+      locked && !is360 ? "block" : "none";
+    if (locked && settings && !is360) {
+      document.getElementById("extract-standard-locked-summary").textContent =
+        `Folosit: ${settings.fps} fps, metoda "${settings.selection_method}", ${settings.num_frames} cadre finale.`;
+    }
+
+    document.getElementById("extract-360-editable").style.display = locked ? "none" : "block";
+    document.getElementById("extract-360-locked").style.display = locked && is360 ? "block" : "none";
+    if (locked && settings && is360) {
+      const layout = settings.layout || "cube";
+      const extras = [
+        `aranjament ${LAYOUT_LABELS[layout] || layout}`,
+        layout !== "cube" ? `${settings.camera_count || 6} camere` : null,
+        settings.resolution ? `${settings.resolution}px` : null,
+        settings.nadir_mask ? "masca polara" : null,
+        settings.ai_mask ? "eliminare operator (AI)" : null,
+        settings.skip_up_frames ? "fara cadre orientate in sus" : null,
+      ].filter(Boolean);
+      document.getElementById("extract-360-locked-summary").textContent =
+        `Folosit: interval ${settings.interval_seconds}s, ${extras.join(", ")}.`;
+    }
+  }
+
+  function updateTrainEvalResults(stage) {
+    const resultsEl = document.getElementById("train-eval-results");
+    if (!stage || !stage.eval_metrics_json) {
+      resultsEl.style.display = "none";
+      return;
+    }
+    let metrics;
+    try {
+      metrics = JSON.parse(stage.eval_metrics_json);
+    } catch (err) {
+      resultsEl.style.display = "none";
+      return;
+    }
+    if (!Array.isArray(metrics) || metrics.length === 0) {
+      resultsEl.style.display = "none";
+      return;
+    }
+    resultsEl.style.display = "block";
+    resultsEl.innerHTML = metrics
+      .map(
+        (m) =>
+          `<div class="job-meta">Iteratia ${m.iteration.toLocaleString("ro-RO")}: ` +
+          `PSNR ${m.psnr.toFixed(2)}, SSIM ${m.ssim.toFixed(4)}</div>`
+      )
+      .join("");
+  }
+
+  function updateTrainSettingsLock(stages) {
+    const stage = stages.find((s) => s.stage === "training");
+    const locked = !!stage && (stage.status === "running" || stage.status === "done");
+    document.getElementById("train-editable-settings").style.display = locked ? "none" : "block";
+    document.getElementById("train-locked-settings").style.display = locked ? "block" : "none";
+    updateTrainEvalResults(stage);
+    if (!locked) return;
+
+    const settings = parseSettingsJson(stage);
+    if (!settings) return;
+
+    document.getElementById("train-locked-gaussians").textContent = settings.max_gaussians
+      ? `Numar maxim de gaussieni: ${settings.max_gaussians.toLocaleString("ro-RO")}`
+      : "Numar maxim de gaussieni: automat";
+
+    const iterationsTotal = settings.iterations || TRAIN_ITERATIONS_DEFAULT;
+    if (stage.status === "running" && stage.progress_percent !== null && stage.progress_percent !== undefined) {
+      // No live gaussian count is exposed by LichtFeld's CLI output (only
+      // the final count, at the very end) - the current iteration is the
+      // only live number available, backed out of the already-parsed percent.
+      const current = Math.round((stage.progress_percent / 100) * iterationsTotal);
+      document.getElementById("train-locked-iterations").textContent =
+        `Iteratie curenta: ${current.toLocaleString("ro-RO")} / ${iterationsTotal.toLocaleString("ro-RO")}`;
+    } else {
+      document.getElementById("train-locked-iterations").textContent =
+        `Iteratii: ${iterationsTotal.toLocaleString("ro-RO")}`;
+    }
+
+    const resizeLabel = settings.resize_factor === 1 ? "1 (rezolutie completa)" : String(settings.resize_factor);
+    document.getElementById("train-locked-resize").textContent = `Redimensionare imagini: ${resizeLabel}`;
+
+    document.getElementById("train-locked-exposure").textContent = settings.variable_exposure
+      ? "Expunere/balans de alb variabila: da"
+      : "Expunere/balans de alb variabila: nu";
+
+    document.getElementById("train-locked-eval").textContent = settings.eval
+      ? `Evaluare obiectiva: da (test la fiecare ${settings.test_every || 8}-lea cadru)`
+      : "Evaluare obiectiva: nu";
+
+    const cloudEl = document.getElementById("train-locked-cloud");
+    if (settings.use_cloud) {
+      const providerLabel = settings.cloud_provider === "vastai" ? "vast.ai" : "RunPod";
+      cloudEl.textContent = `Antrenare in cloud: ${providerLabel}, GPU ${settings.cloud_gpu_type || "?"}`;
+    } else {
+      cloudEl.textContent = "";
+    }
+  }
+
   async function refresh() {
     const job = await apiGet(`/jobs/${jobId}`);
     document.getElementById("job-name").textContent = job.name;
@@ -430,6 +708,7 @@
     const stages = await apiGet(`/jobs/${jobId}/stages`);
     applyStages(stages);
     await loadExtractSettingsDefaults();
+    await loadTrainSettingsDefaults();
     await loadRawVideos();
   }
 
@@ -443,7 +722,20 @@
     });
   }
 
+  function intOr(rawValue, defaultValue) {
+    // `parseInt(...) || default` silently discards a legitimately-entered
+    // "0" (0 is falsy in JS) - only fall back when parsing actually failed.
+    const parsed = parseInt(rawValue, 10);
+    return Number.isNaN(parsed) ? defaultValue : parsed;
+  }
+
+  function floatOr(rawValue, defaultValue) {
+    const parsed = parseFloat(rawValue);
+    return Number.isNaN(parsed) ? defaultValue : parsed;
+  }
+
   const EXTRACT_DEFAULTS = { fps: 10, num_frames: 300, selection_method: "batched" };
+  const LAYOUT_LABELS = { cube: "cub", ring: "inel", fibonacci: "fibonacci" };
 
   async function loadExtractSettingsDefaults() {
     let extraction = EXTRACT_DEFAULTS;
@@ -477,6 +769,70 @@
     }
   }
 
+  // LichtFeld's own default when --iter is never passed - confirmed against
+  // real training runs in data/training_runs.jsonl (iterations_configured: 30000).
+  const TRAIN_ITERATIONS_DEFAULT = 30000;
+  const TRAIN_MAX_GAUSSIANS_DEFAULT = 2_000_000;
+  // LichtFeld only accepts these discrete --resize_factor values (not a
+  // continuous range) - null means "omit the flag", which app/training_service.py
+  // resolves via training_resize_factor(frame_count) same as before this slider existed.
+  const RESIZE_FACTOR_STEPS = [null, 1, 2, 4, 8];
+  const RESIZE_FACTOR_LABELS = ["Automat", "1 (rezolutie completa)", "2", "4", "8"];
+
+  async function loadTrainSettingsDefaults() {
+    let maxGaussians = TRAIN_MAX_GAUSSIANS_DEFAULT;
+    let hint = "Recomandarea nu a fost calculata inca — foloseste valoarea implicita. O poti ajusta.";
+    try {
+      const rec = await apiGet(`/jobs/${jobId}/recommendation`);
+      if (rec.lichtfeld) {
+        maxGaussians = rec.lichtfeld.max_gaussians;
+        hint = `Recomandat pe baza VRAM-ului detectat: ${maxGaussians.toLocaleString("ro-RO")}. O poti ajusta.`;
+      }
+    } catch (err) {
+      // recommendation not computed yet - keep default
+    }
+
+    const gaussiansSlider = document.getElementById("train-max-gaussians");
+    gaussiansSlider.value = maxGaussians;
+    document.getElementById("train-max-gaussians-value").textContent = maxGaussians.toLocaleString("ro-RO");
+    document.getElementById("train-max-gaussians-hint").textContent = hint;
+
+    const iterationsSlider = document.getElementById("train-iterations");
+    iterationsSlider.value = TRAIN_ITERATIONS_DEFAULT;
+    document.getElementById("train-iterations-value").textContent = TRAIN_ITERATIONS_DEFAULT.toLocaleString("ro-RO");
+
+    const resizeFactorSlider = document.getElementById("train-resize-factor");
+    resizeFactorSlider.value = 0;
+    document.getElementById("train-resize-factor-value").textContent = RESIZE_FACTOR_LABELS[0];
+  }
+
+  document.getElementById("train-max-gaussians").addEventListener("input", (event) => {
+    document.getElementById("train-max-gaussians-value").textContent =
+      parseInt(event.target.value, 10).toLocaleString("ro-RO");
+  });
+  document.getElementById("train-iterations").addEventListener("input", (event) => {
+    document.getElementById("train-iterations-value").textContent =
+      parseInt(event.target.value, 10).toLocaleString("ro-RO");
+  });
+  document.getElementById("train-resize-factor").addEventListener("input", (event) => {
+    document.getElementById("train-resize-factor-value").textContent =
+      RESIZE_FACTOR_LABELS[parseInt(event.target.value, 10)];
+  });
+
+  function updateTrainEvalFieldVisibility() {
+    document.getElementById("train-test-every-row").style.display =
+      document.getElementById("train-eval").checked ? "block" : "none";
+  }
+  document.getElementById("train-eval").addEventListener("change", updateTrainEvalFieldVisibility);
+  updateTrainEvalFieldVisibility();
+
+  function updateTrainCloudFieldVisibility() {
+    document.getElementById("train-cloud-settings").style.display =
+      document.getElementById("train-use-cloud").checked ? "block" : "none";
+  }
+  document.getElementById("train-use-cloud").addEventListener("change", updateTrainCloudFieldVisibility);
+  updateTrainCloudFieldVisibility();
+
   function updateExtractFieldVisibility() {
     const method = document.getElementById("extract-method").value;
     document.getElementById("extract-num-frames-row").style.display =
@@ -487,154 +843,282 @@
 
   document.getElementById("extract-method").addEventListener("change", updateExtractFieldVisibility);
 
-  document.getElementById("btn-add-clip-upload").addEventListener("click", async () => {
-    const files = Array.from(document.getElementById("add-clip-file-input").files);
-    const statusEl = document.getElementById("add-clip-status");
-    if (files.length === 0) {
-      statusEl.textContent = "Alege cel putin un fisier video.";
-      return;
-    }
-    statusEl.textContent = "";
+  function updateExtract360LayoutVisibility() {
+    // Only the cube layout has a fixed "Up"/"Down" face (docs/SETTINGS.md) -
+    // --camera-count is meaningless for cube (the real tool ignores it,
+    // always forcing 6), while --nadir-mask and the skip-up-frames checkbox
+    // are only calibrated against cube's fixed face indices (see
+    // app/three_sixty_extractor.py's _ACTIVE_CAMERAS_EXCLUDING_UP comment).
+    const isCube = document.getElementById("extract-360-layout").value === "cube";
+    document.getElementById("extract-360-camera-count-row").style.display = isCube ? "none" : "block";
+    document.getElementById("extract-360-nadir-mask-row").style.display = isCube ? "block" : "none";
+    document.getElementById("extract-360-skip-up-row").style.display = isCube ? "block" : "none";
+  }
 
-    const listEl = document.getElementById("add-clip-upload-list");
-    listEl.innerHTML = "";
-    const rows = files.map((file) => {
-      const row = document.createElement("div");
-      row.className = "upload-row";
-      row.innerHTML = `
-        <div class="upload-row-name">${escapeHtml(file.name)}</div>
-        <div class="progress-track"><div class="progress-fill" style="width:0%"></div></div>
-        <div class="upload-row-error"></div>
-      `;
-      listEl.appendChild(row);
-      return row;
-    });
+  document.getElementById("extract-360-layout").addEventListener("change", updateExtract360LayoutVisibility);
+  updateExtract360LayoutVisibility();
 
-    for (let index = 0; index < files.length; index += 1) {
-      const fill = rows[index].querySelector(".progress-fill");
-      try {
-        await uploadFileToJob(jobId, files[index], (done, total) => {
-          fill.style.width = `${Math.round((done / total) * 100)}%`;
-        });
-        rows[index].classList.add("upload-row-done");
-      } catch (err) {
-        rows[index].classList.add("upload-row-failed");
-        rows[index].querySelector(".upload-row-error").textContent = err.message || String(err);
+  function confirmAction(title, body) {
+    // Promise-based so callers can `if (!(await confirmAction(...))) return;`
+    // - replaces the browser-native confirm() previously used for the three
+    // cancel buttons below, which looked jarringly out of place next to the
+    // app's own themed modal (already used for job/frame deletion).
+    return new Promise((resolve) => {
+      document.getElementById("confirm-modal-title").textContent = title;
+      document.getElementById("confirm-modal-text").textContent = body;
+      const overlay = document.getElementById("confirm-modal");
+      const confirmBtn = document.getElementById("confirm-modal-confirm-btn");
+      const cancelBtn = document.getElementById("confirm-modal-cancel-btn");
+
+      function cleanup(result) {
+        overlay.classList.remove("visible");
+        confirmBtn.removeEventListener("click", onConfirm);
+        cancelBtn.removeEventListener("click", onCancel);
+        resolve(result);
       }
-    }
+      function onConfirm() { cleanup(true); }
+      function onCancel() { cleanup(false); }
 
-    document.getElementById("add-clip-file-input").value = "";
-    refresh();
-    stopPolling();
-    stopPolling = startPolling();
+      confirmBtn.addEventListener("click", onConfirm);
+      cancelBtn.addEventListener("click", onCancel);
+      overlay.classList.add("visible");
+    });
+  }
+
+  document.getElementById("btn-add-clip-upload").addEventListener("click", () => {
+    runAction(document.getElementById("btn-add-clip-upload"), async () => {
+      const files = Array.from(document.getElementById("add-clip-file-input").files);
+      const statusEl = document.getElementById("add-clip-status");
+      if (files.length === 0) {
+        statusEl.textContent = "Alege cel putin un fisier video.";
+        return;
+      }
+      statusEl.textContent = "";
+
+      const listEl = document.getElementById("add-clip-upload-list");
+      listEl.innerHTML = "";
+      const rows = files.map((file) => {
+        const row = document.createElement("div");
+        row.className = "upload-row";
+        row.innerHTML = `
+          <div class="upload-row-name">${escapeHtml(file.name)}</div>
+          <div class="progress-track"><div class="progress-fill" style="width:0%"></div></div>
+          <div class="upload-row-error"></div>
+        `;
+        listEl.appendChild(row);
+        return row;
+      });
+
+      for (let index = 0; index < files.length; index += 1) {
+        const fill = rows[index].querySelector(".progress-fill");
+        try {
+          await uploadFileToJob(jobId, files[index], (done, total) => {
+            fill.style.width = `${Math.round((done / total) * 100)}%`;
+          });
+          rows[index].classList.add("upload-row-done");
+        } catch (err) {
+          rows[index].classList.add("upload-row-failed");
+          rows[index].querySelector(".upload-row-error").textContent = err.message || String(err);
+        }
+      }
+
+      document.getElementById("add-clip-file-input").value = "";
+      refresh();
+      stopPolling();
+      stopPolling = startPolling();
+    });
   });
 
   document.getElementById("btn-ingestion-continue").addEventListener("click", () => {
     goToSlide(STORIES.indexOf("frame_extraction"), { isUserAction: true });
   });
 
-  document.getElementById("btn-import-frames").addEventListener("click", async () => {
-    const sourcePath = document.getElementById("import-frames-path").value.trim();
-    if (!sourcePath) {
-      alert("Introdu calea folderului cu cadre.");
-      return;
-    }
-    await apiPost(`/jobs/${jobId}/import-frames`, { source_path: sourcePath });
-    refresh();
-    stopPolling();
-    stopPolling = startPolling();
-  });
-
-  document.getElementById("btn-extract").addEventListener("click", async () => {
-    const fps = parseInt(document.getElementById("extract-fps").value, 10) || EXTRACT_DEFAULTS.fps;
-    const rawMethod =
-      document.getElementById("extract-method").value || EXTRACT_DEFAULTS.selection_method;
-
-    let selectionMethod = rawMethod;
-    let numFrames =
-      parseInt(document.getElementById("extract-num-frames").value, 10) || EXTRACT_DEFAULTS.num_frames;
-
-    if (rawMethod === "percent") {
-      // sharp-frames has no native "percent" method - "best-n" already picks
-      // the sharpest frames first while spreading them roughly evenly (see
-      // sharp-frames' select_best_n_frames), so the percentage just needs
-      // converting into a concrete frame count using the same total-sampled
-      // estimate app/recommendation.py uses (duration * fps).
-      const percent = parseFloat(document.getElementById("extract-percent").value) || 50;
-      const totalSampled = videoDurationSeconds
-        ? Math.round(videoDurationSeconds * fps)
-        : EXTRACT_DEFAULTS.num_frames;
-      numFrames = Math.max(1, Math.round((totalSampled * percent) / 100));
-      selectionMethod = "best-n";
-    }
-
-    const intervalSeconds = parseFloat(document.getElementById("extract-360-interval").value) || 1.0;
-    const aiMask = document.getElementById("extract-360-ai-mask").checked;
-
-    await apiPost(`/jobs/${jobId}/extract-frames`, {
-      fps: fps,
-      num_frames: numFrames,
-      selection_method: selectionMethod,
-      interval_seconds: intervalSeconds,
-      ai_mask: aiMask,
+  document.getElementById("btn-cancel-ingest").addEventListener("click", () => {
+    runAction(document.getElementById("btn-cancel-ingest"), async () => {
+      const confirmed = await confirmAction(
+        "Opresti ingestia?", "Progresul curent se pierde."
+      );
+      if (!confirmed) return;
+      await apiPost(`/jobs/${jobId}/ingest/cancel`, {});
+      refresh();
+      stopPolling();
+      stopPolling = startPolling();
     });
-    refresh();
-    stopPolling();
-    stopPolling = startPolling();
   });
 
-  document.getElementById("btn-cancel-extract").addEventListener("click", async () => {
-    if (!confirm("Sigur vrei sa opresti extragerea cadrelor? Progresul curent se pierde.")) return;
-    await apiPost(`/jobs/${jobId}/extract-frames/cancel`, {});
-    refresh();
-    stopPolling();
-    stopPolling = startPolling();
+  document.getElementById("btn-import-frames").addEventListener("click", () => {
+    runAction(document.getElementById("btn-import-frames"), async () => {
+      const sourcePath = document.getElementById("import-frames-path").value.trim();
+      if (!sourcePath) {
+        alert("Introdu calea folderului cu cadre.");
+        return;
+      }
+      await apiPost(`/jobs/${jobId}/import-frames`, { source_path: sourcePath });
+      refresh();
+      stopPolling();
+      stopPolling = startPolling();
+    });
   });
 
-  document.getElementById("btn-align").addEventListener("click", async () => {
-    await apiPost(`/jobs/${jobId}/align`, {});
-    refresh();
-    stopPolling();
-    stopPolling = startPolling();
+  document.getElementById("btn-extract").addEventListener("click", () => {
+    runAction(document.getElementById("btn-extract"), async () => {
+      const fps = intOr(document.getElementById("extract-fps").value, EXTRACT_DEFAULTS.fps);
+      const rawMethod =
+        document.getElementById("extract-method").value || EXTRACT_DEFAULTS.selection_method;
+
+      let selectionMethod = rawMethod;
+      let numFrames = intOr(
+        document.getElementById("extract-num-frames").value, EXTRACT_DEFAULTS.num_frames
+      );
+
+      if (rawMethod === "percent") {
+        // sharp-frames has no native "percent" method - "best-n" already picks
+        // the sharpest frames first while spreading them roughly evenly (see
+        // sharp-frames' select_best_n_frames), so the percentage just needs
+        // converting into a concrete frame count using the same total-sampled
+        // estimate app/recommendation.py uses (duration * fps).
+        const percent = floatOr(document.getElementById("extract-percent").value, 50);
+        const totalSampled = videoDurationSeconds
+          ? Math.round(videoDurationSeconds * fps)
+          : EXTRACT_DEFAULTS.num_frames;
+        numFrames = Math.max(1, Math.round((totalSampled * percent) / 100));
+        selectionMethod = "best-n";
+      }
+
+      const intervalSeconds = floatOr(document.getElementById("extract-360-interval").value, 1.0);
+      const aiMask = document.getElementById("extract-360-ai-mask").checked;
+      const skipUpFrames = document.getElementById("extract-360-skip-up").checked;
+      const layout = document.getElementById("extract-360-layout").value;
+      const cameraCount = intOr(document.getElementById("extract-360-camera-count").value, 6);
+      const resolution = intOr(document.getElementById("extract-360-resolution").value, 2048);
+      const nadirMask = document.getElementById("extract-360-nadir-mask").checked;
+
+      await apiPost(`/jobs/${jobId}/extract-frames`, {
+        fps: fps,
+        num_frames: numFrames,
+        selection_method: selectionMethod,
+        interval_seconds: intervalSeconds,
+        ai_mask: aiMask,
+        skip_up_frames: skipUpFrames,
+        layout: layout,
+        camera_count: cameraCount,
+        resolution: resolution,
+        nadir_mask: nadirMask,
+      });
+      refresh();
+      stopPolling();
+      stopPolling = startPolling();
+    });
   });
 
-  document.getElementById("btn-cancel-align").addEventListener("click", async () => {
-    if (!confirm("Sigur vrei sa opresti alignment-ul? Progresul curent se pierde.")) return;
-    await apiPost(`/jobs/${jobId}/align/cancel`, {});
-    refresh();
-    stopPolling();
-    stopPolling = startPolling();
+  document.getElementById("btn-cancel-extract").addEventListener("click", () => {
+    runAction(document.getElementById("btn-cancel-extract"), async () => {
+      const confirmed = await confirmAction(
+        "Opresti extragerea?", "Progresul curent se pierde."
+      );
+      if (!confirmed) return;
+      await apiPost(`/jobs/${jobId}/extract-frames/cancel`, {});
+      refresh();
+      stopPolling();
+      stopPolling = startPolling();
+    });
   });
 
-  document.getElementById("btn-recommend").addEventListener("click", async () => {
-    await apiPost(`/jobs/${jobId}/recommend`, {});
-    refresh();
-    stopPolling();
-    stopPolling = startPolling();
+  document.getElementById("btn-align").addEventListener("click", () => {
+    runAction(document.getElementById("btn-align"), async () => {
+      await apiPost(`/jobs/${jobId}/align`, {});
+      refresh();
+      stopPolling();
+      stopPolling = startPolling();
+    });
   });
 
-  document.getElementById("btn-train").addEventListener("click", async () => {
-    const variableExposure = document.getElementById("train-variable-exposure").checked;
-    await apiPost(`/jobs/${jobId}/train`, { variable_exposure: variableExposure });
-    refresh();
-    stopPolling();
-    stopPolling = startPolling();
+  document.getElementById("btn-cancel-align").addEventListener("click", () => {
+    runAction(document.getElementById("btn-cancel-align"), async () => {
+      const confirmed = await confirmAction(
+        "Opresti alignment-ul?", "Progresul curent se pierde."
+      );
+      if (!confirmed) return;
+      await apiPost(`/jobs/${jobId}/align/cancel`, {});
+      refresh();
+      stopPolling();
+      stopPolling = startPolling();
+    });
   });
 
-  document.getElementById("btn-cancel-train").addEventListener("click", async () => {
-    if (!confirm("Sigur vrei sa opresti antrenarea? Progresul curent se pierde.")) return;
-    await apiPost(`/jobs/${jobId}/train/cancel`, {});
-    refresh();
-    stopPolling();
-    stopPolling = startPolling();
+  document.getElementById("btn-recommend").addEventListener("click", () => {
+    runAction(document.getElementById("btn-recommend"), async () => {
+      await apiPost(`/jobs/${jobId}/recommend`, {});
+      refresh();
+      stopPolling();
+      stopPolling = startPolling();
+    });
   });
 
-  document.getElementById("btn-export").addEventListener("click", async () => {
-    const format = document.getElementById("export-format").value;
-    await apiPost(`/jobs/${jobId}/export`, { format: format });
-    refresh();
-    stopPolling();
-    stopPolling = startPolling();
+  document.getElementById("btn-train").addEventListener("click", () => {
+    runAction(document.getElementById("btn-train"), async () => {
+      const variableExposure = document.getElementById("train-variable-exposure").checked;
+      const maxGaussians = parseInt(document.getElementById("train-max-gaussians").value, 10);
+      const iterations = parseInt(document.getElementById("train-iterations").value, 10);
+      const resizeFactorIndex = parseInt(document.getElementById("train-resize-factor").value, 10);
+      const evalEnabled = document.getElementById("train-eval").checked;
+      const testEvery = intOr(document.getElementById("train-test-every").value, 8);
+      const useCloud = document.getElementById("train-use-cloud").checked;
+      const cloudProvider = document.getElementById("train-cloud-provider").value;
+      const cloudImage = document.getElementById("train-cloud-image").value.trim();
+      const cloudGpuType = document.getElementById("train-cloud-gpu-type").value.trim();
+      await apiPost(`/jobs/${jobId}/train`, {
+        variable_exposure: variableExposure,
+        max_gaussians: maxGaussians,
+        iterations: iterations,
+        resize_factor: RESIZE_FACTOR_STEPS[resizeFactorIndex],
+        eval: evalEnabled,
+        test_every: evalEnabled ? testEvery : null,
+        use_cloud: useCloud,
+        cloud_provider: cloudProvider,
+        cloud_image: useCloud ? cloudImage : null,
+        cloud_gpu_type: useCloud ? cloudGpuType : null,
+      });
+      refresh();
+      stopPolling();
+      stopPolling = startPolling();
+    });
+  });
+
+  document.getElementById("btn-cancel-train").addEventListener("click", () => {
+    runAction(document.getElementById("btn-cancel-train"), async () => {
+      const confirmed = await confirmAction(
+        "Opresti antrenarea?", "Progresul curent se pierde."
+      );
+      if (!confirmed) return;
+      await apiPost(`/jobs/${jobId}/train/cancel`, {});
+      refresh();
+      stopPolling();
+      stopPolling = startPolling();
+    });
+  });
+
+  document.getElementById("btn-export").addEventListener("click", () => {
+    runAction(document.getElementById("btn-export"), async () => {
+      const format = document.getElementById("export-format").value;
+      await apiPost(`/jobs/${jobId}/export`, { format: format });
+      refresh();
+      stopPolling();
+      stopPolling = startPolling();
+    });
+  });
+
+  document.getElementById("btn-cancel-export").addEventListener("click", () => {
+    runAction(document.getElementById("btn-cancel-export"), async () => {
+      const confirmed = await confirmAction(
+        "Opresti exportul?", "Progresul curent se pierde."
+      );
+      if (!confirmed) return;
+      await apiPost(`/jobs/${jobId}/export/cancel`, {});
+      refresh();
+      stopPolling();
+      stopPolling = startPolling();
+    });
   });
 
   document.getElementById("story-track").addEventListener("click", (event) => {
@@ -673,10 +1157,21 @@
   });
 
   const extractMethodSelect = initCustomSelect(document.getElementById("extract-method"));
+  initCustomSelect(document.getElementById("extract-360-layout"));
   initCustomSelect(document.getElementById("export-format"));
+  initCustomSelect(document.getElementById("train-cloud-provider"));
 
-  refresh();
-  let stopPolling = startPolling();
+  // refresh() must resolve first: it's what sets `deviceType` from
+  // /jobs/{id}, and updateActions() (run by every poll tick) reads that
+  // global to decide 360-specific button visibility. Firing startPolling()
+  // in parallel instead of after raced the two independent fetches - a poll
+  // tick landing first could run updateActions() against the hardcoded
+  // "standard" default for one tick on a 360 job.
+  let stopPolling = () => {};
+  (async () => {
+    await refresh();
+    stopPolling = startPolling();
+  })();
   pollUsage(renderUsage, 2000);
 </script>
 </body>

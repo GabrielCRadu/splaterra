@@ -25,14 +25,14 @@ def pytest_configure(config):
 
 @pytest.fixture
 def job_store(tmp_path, monkeypatch):
-    monkeypatch.setenv("SPLATPREP_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("SPLATERRA_DATA_DIR", str(tmp_path))
     conn = db.connect(tmp_path / "test.db")
     return JobStore(conn)
 
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("SPLATPREP_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("SPLATERRA_DATA_DIR", str(tmp_path))
     from fastapi.testclient import TestClient
 
     from app.main import app

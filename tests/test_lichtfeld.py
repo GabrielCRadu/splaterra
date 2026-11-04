@@ -36,19 +36,38 @@ def _make_process_with_output(process, text: str):
     return process
 
 
+def test_run_training_forces_utf8_decoding(tmp_path, monkeypatch):
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+    output_dir = tmp_path / "out"
+    captured = {}
+
+    def fake_popen(command, **kwargs):
+        captured["kwargs"] = kwargs
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "result.ply").write_bytes(b"fake ply")
+        return _make_process_with_output(process=_fake_popen_result(0), text="")
+
+    monkeypatch.setattr(lichtfeld.subprocess, "Popen", fake_popen)
+
+    lichtfeld.run_training(tmp_path / "data", output_dir)
+
+    assert captured["kwargs"]["encoding"] == "utf-8"
+    assert captured["kwargs"]["errors"] == "replace"
+
+
 def test_run_training_raises_when_binary_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: None)
-    monkeypatch.delenv("SPLATPREP_LICHTFELD_DIR", raising=False)
+    monkeypatch.delenv("SPLATERRA_LICHTFELD_DIR", raising=False)
     with pytest.raises(lichtfeld.LichtFeldError, match="not found"):
         lichtfeld.run_training(tmp_path / "data", tmp_path / "out")
 
 
-def test_lichtfeld_binary_uses_splatprep_lichtfeld_dir_env_var(tmp_path, monkeypatch):
+def test_lichtfeld_binary_uses_splaterra_lichtfeld_dir_env_var(tmp_path, monkeypatch):
     monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: None)
     fake_exe = tmp_path / "bin" / "LichtFeld-Studio.exe"
     fake_exe.parent.mkdir(parents=True)
     fake_exe.write_text("")
-    monkeypatch.setenv("SPLATPREP_LICHTFELD_DIR", str(tmp_path))
+    monkeypatch.setenv("SPLATERRA_LICHTFELD_DIR", str(tmp_path))
 
     assert lichtfeld._lichtfeld_binary() == str(fake_exe)
 
@@ -57,7 +76,7 @@ def test_run_training_calls_on_log_with_accumulated_output(tmp_path, monkeypatch
     monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
     output_dir = tmp_path / "out"
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "result.ply").write_bytes(b"fake ply")
         return _make_process_with_output(
@@ -89,7 +108,7 @@ def test_run_training_omits_max_cap_flag_when_not_given(tmp_path, monkeypatch):
     output_dir = tmp_path / "out"
     captured = {}
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         captured["command"] = command
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "result.ply").write_bytes(b"fake ply")
@@ -110,7 +129,7 @@ def test_run_training_includes_max_cap_flag_when_given(tmp_path, monkeypatch):
     output_dir = tmp_path / "out"
     captured = {}
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         captured["command"] = command
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "result.ply").write_bytes(b"fake ply")
@@ -124,12 +143,49 @@ def test_run_training_includes_max_cap_flag_when_given(tmp_path, monkeypatch):
     assert captured["command"][index + 1] == "2000000"
 
 
+def test_run_training_omits_iter_flag_when_not_given(tmp_path, monkeypatch):
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+    output_dir = tmp_path / "out"
+    captured = {}
+
+    def fake_popen(command, **kwargs):
+        captured["command"] = command
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "result.ply").write_bytes(b"fake ply")
+        return _make_process_with_output(process=_fake_popen_result(0), text="")
+
+    monkeypatch.setattr(lichtfeld.subprocess, "Popen", fake_popen)
+
+    lichtfeld.run_training(tmp_path / "data", output_dir)
+
+    assert "--iter" not in captured["command"]
+
+
+def test_run_training_includes_iter_flag_when_given(tmp_path, monkeypatch):
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+    output_dir = tmp_path / "out"
+    captured = {}
+
+    def fake_popen(command, **kwargs):
+        captured["command"] = command
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "result.ply").write_bytes(b"fake ply")
+        return _make_process_with_output(process=_fake_popen_result(0), text="")
+
+    monkeypatch.setattr(lichtfeld.subprocess, "Popen", fake_popen)
+
+    lichtfeld.run_training(tmp_path / "data", output_dir, iterations=15000)
+
+    index = captured["command"].index("--iter")
+    assert captured["command"][index + 1] == "15000"
+
+
 def test_run_training_calls_on_process_start_with_the_popen_object(tmp_path, monkeypatch):
     monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
     output_dir = tmp_path / "out"
     fake_process = _make_process_with_output(process=_fake_popen_result(0), text="")
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "result.ply").write_bytes(b"fake ply")
         return fake_process
@@ -149,7 +205,7 @@ def test_run_training_omits_bilateral_grid_flag_by_default(tmp_path, monkeypatch
     output_dir = tmp_path / "out"
     captured = {}
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         captured["command"] = command
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "result.ply").write_bytes(b"fake ply")
@@ -167,7 +223,7 @@ def test_run_training_includes_bilateral_grid_flag_when_requested(tmp_path, monk
     output_dir = tmp_path / "out"
     captured = {}
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         captured["command"] = command
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "result.ply").write_bytes(b"fake ply")
@@ -185,7 +241,7 @@ def test_run_training_omits_resize_factor_flag_by_default(tmp_path, monkeypatch)
     output_dir = tmp_path / "out"
     captured = {}
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         captured["command"] = command
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "result.ply").write_bytes(b"fake ply")
@@ -203,7 +259,7 @@ def test_run_training_includes_resize_factor_flag_when_requested(tmp_path, monke
     output_dir = tmp_path / "out"
     captured = {}
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         captured["command"] = command
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "result.ply").write_bytes(b"fake ply")
@@ -217,11 +273,130 @@ def test_run_training_includes_resize_factor_flag_when_requested(tmp_path, monke
     assert captured["command"][index + 1] == "2"
 
 
+def test_run_training_includes_resize_factor_flag_when_explicitly_one(tmp_path, monkeypatch):
+    # resize_factor=1 must be passed through literally (force full
+    # resolution), not silently treated as "omit the flag" - only None means
+    # "let LichtFeld's own auto-detection decide".
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+    output_dir = tmp_path / "out"
+    captured = {}
+
+    def fake_popen(command, **kwargs):
+        captured["command"] = command
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "result.ply").write_bytes(b"fake ply")
+        return _make_process_with_output(process=_fake_popen_result(0), text="")
+
+    monkeypatch.setattr(lichtfeld.subprocess, "Popen", fake_popen)
+
+    lichtfeld.run_training(tmp_path / "data", output_dir, resize_factor=1)
+
+    index = captured["command"].index("--resize_factor")
+    assert captured["command"][index + 1] == "1"
+
+
+def test_run_training_includes_eval_flag_when_enabled(tmp_path, monkeypatch):
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+    output_dir = tmp_path / "out"
+    captured = {}
+
+    def fake_popen(command, **kwargs):
+        captured["command"] = command
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "result.ply").write_bytes(b"fake ply")
+        return _make_process_with_output(process=_fake_popen_result(0), text="")
+
+    monkeypatch.setattr(lichtfeld.subprocess, "Popen", fake_popen)
+
+    lichtfeld.run_training(tmp_path / "data", output_dir, eval=True)
+
+    assert "--eval" in captured["command"]
+
+
+def test_run_training_omits_eval_flag_by_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+    output_dir = tmp_path / "out"
+    captured = {}
+
+    def fake_popen(command, **kwargs):
+        captured["command"] = command
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "result.ply").write_bytes(b"fake ply")
+        return _make_process_with_output(process=_fake_popen_result(0), text="")
+
+    monkeypatch.setattr(lichtfeld.subprocess, "Popen", fake_popen)
+
+    lichtfeld.run_training(tmp_path / "data", output_dir)
+
+    assert "--eval" not in captured["command"]
+
+
+def test_run_training_includes_test_every_flag_when_set(tmp_path, monkeypatch):
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+    output_dir = tmp_path / "out"
+    captured = {}
+
+    def fake_popen(command, **kwargs):
+        captured["command"] = command
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "result.ply").write_bytes(b"fake ply")
+        return _make_process_with_output(process=_fake_popen_result(0), text="")
+
+    monkeypatch.setattr(lichtfeld.subprocess, "Popen", fake_popen)
+
+    lichtfeld.run_training(tmp_path / "data", output_dir, eval=True, test_every=4)
+
+    index = captured["command"].index("--test-every")
+    assert captured["command"][index + 1] == "4"
+
+
+def test_run_training_parses_eval_metrics_csv_when_present(tmp_path, monkeypatch):
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+    output_dir = tmp_path / "out"
+
+    def fake_popen(command, **kwargs):
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "result.ply").write_bytes(b"fake ply")
+        # Real format written by LichtFeld's MetricsReporter (src/training/
+        # metrics/metrics.cpp) - header plus one row per eval step.
+        (output_dir / "metrics.csv").write_text(
+            "iteration,psnr,ssim,time_per_image,num_gaussians\n"
+            "7000,24.123456,0.812345,0.045678,812345\n"
+            "30000,28.654321,0.891234,0.051234,1123456\n"
+        )
+        return _make_process_with_output(process=_fake_popen_result(0), text="")
+
+    monkeypatch.setattr(lichtfeld.subprocess, "Popen", fake_popen)
+
+    result = lichtfeld.run_training(tmp_path / "data", output_dir, eval=True)
+
+    assert result.eval_metrics == [
+        {"iteration": 7000, "psnr": 24.123456, "ssim": 0.812345, "time_per_image": 0.045678, "num_gaussians": 812345},
+        {"iteration": 30000, "psnr": 28.654321, "ssim": 0.891234, "time_per_image": 0.051234, "num_gaussians": 1123456},
+    ]
+
+
+def test_run_training_eval_metrics_is_none_without_metrics_csv(tmp_path, monkeypatch):
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+    output_dir = tmp_path / "out"
+
+    def fake_popen(command, **kwargs):
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "result.ply").write_bytes(b"fake ply")
+        return _make_process_with_output(process=_fake_popen_result(0), text="")
+
+    monkeypatch.setattr(lichtfeld.subprocess, "Popen", fake_popen)
+
+    result = lichtfeld.run_training(tmp_path / "data", output_dir)
+
+    assert result.eval_metrics is None
+
+
 def test_run_training_picks_most_recently_modified_ply_or_sog(tmp_path, monkeypatch):
     monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
     output_dir = tmp_path / "out"
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         nested = output_dir / "checkpoints"
         nested.mkdir(parents=True, exist_ok=True)
         older = nested / "iter_1000.ply"
@@ -241,10 +416,36 @@ def test_run_training_picks_most_recently_modified_ply_or_sog(tmp_path, monkeypa
     assert result.splat_path == output_dir / "checkpoints" / "iter_5000.sog"
 
 
+def test_run_training_ignores_stale_output_from_a_previous_run(tmp_path, monkeypatch):
+    # A leftover .ply from an earlier run against the same output_dir must
+    # never be reported as this run's result just because no new file was
+    # produced this time (e.g. a benign-looking early exit) - that would
+    # silently report success with stale data.
+    monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+    output_dir = tmp_path / "out"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    stale = output_dir / "old_result.ply"
+    stale.write_bytes(b"old")
+
+    import os
+
+    old_time = time.time() - 3600
+    os.utime(stale, (old_time, old_time))
+
+    def fake_popen(command, **kwargs):
+        # No new file written this run.
+        return _make_process_with_output(process=_fake_popen_result(0), text="")
+
+    monkeypatch.setattr(lichtfeld.subprocess, "Popen", fake_popen)
+
+    with pytest.raises(lichtfeld.LichtFeldError, match="did not produce a .ply or .sog"):
+        lichtfeld.run_training(tmp_path / "data", output_dir)
+
+
 def test_run_training_raises_when_no_output_files_found(tmp_path, monkeypatch):
     monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         return _make_process_with_output(process=_fake_popen_result(0), text="")
 
     monkeypatch.setattr(lichtfeld.subprocess, "Popen", fake_popen)
@@ -256,7 +457,7 @@ def test_run_training_raises_when_no_output_files_found(tmp_path, monkeypatch):
 def test_run_training_raises_on_nonzero_exit(tmp_path, monkeypatch):
     monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         return _make_process_with_output(process=_fake_popen_result(1), text="CUDA error: out of memory\n")
 
     monkeypatch.setattr(lichtfeld.subprocess, "Popen", fake_popen)
@@ -270,7 +471,7 @@ def test_run_training_reports_progress_from_tqdm_style_output(tmp_path, monkeypa
     output_dir = tmp_path / "out"
     fake_output = "training:  10%|1  | 1000/10000\rtraining:  50%|5  | 5000/10000\rtraining: 100%|##| 10000/10000\n"
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "result.ply").write_bytes(b"fake")
         return _make_process_with_output(process=_fake_popen_result(0), text=fake_output)
@@ -287,7 +488,7 @@ def test_run_training_does_not_crash_when_no_progress_pattern_matches(tmp_path, 
     monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
     output_dir = tmp_path / "out"
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "result.ply").write_bytes(b"fake")
         return _make_process_with_output(
@@ -304,6 +505,10 @@ def test_run_training_does_not_crash_when_no_progress_pattern_matches(tmp_path, 
 
 def test_run_training_raises_on_timeout(tmp_path, monkeypatch):
     monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
+    # kill_process_tree talks to the real OS via psutil.Process(pid) - not
+    # meaningful against a MagicMock's fake pid, and already covered for real
+    # in tests/test_process_kill.py.
+    monkeypatch.setattr(lichtfeld, "kill_process_tree", MagicMock())
 
     # This reader thread outlives this test (HangingStdout never reaches EOF,
     # so it's never joined) and was observed corrupting an unrelated later
@@ -315,7 +520,7 @@ def test_run_training_raises_on_timeout(tmp_path, monkeypatch):
             _REAL_SLEEP(0.01)
             return " "  # never EOF, never \r or \n
 
-    def fake_popen(command, stdout, stderr, text, bufsize):
+    def fake_popen(command, **kwargs):
         process = MagicMock()
         process.stdout = HangingStdout()
         process.kill = MagicMock()
@@ -348,7 +553,7 @@ def test_convert_splat_builds_correct_command(tmp_path, monkeypatch):
     output_path = tmp_path / "out.spz"
     captured = {}
 
-    def fake_run(command, capture_output, text, check, timeout):
+    def fake_run(command, **kwargs):
         captured["command"] = command
         output_path.write_bytes(b"fake spz")
         result = MagicMock()
@@ -376,7 +581,7 @@ def test_convert_splat_passes_sh_degree(tmp_path, monkeypatch):
     output_path = tmp_path / "out.spz"
     captured = {}
 
-    def fake_run(command, capture_output, text, check, timeout):
+    def fake_run(command, **kwargs):
         captured["command"] = command
         output_path.write_bytes(b"fake")
         result = MagicMock()
@@ -397,7 +602,7 @@ def test_convert_splat_passes_sh_degree(tmp_path, monkeypatch):
 def test_convert_splat_raises_on_nonzero_exit(tmp_path, monkeypatch):
     monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
 
-    def fake_run(command, capture_output, text, check, timeout):
+    def fake_run(command, **kwargs):
         result = MagicMock()
         result.returncode = 1
         result.stdout = ""
@@ -413,7 +618,7 @@ def test_convert_splat_raises_on_nonzero_exit(tmp_path, monkeypatch):
 def test_convert_splat_raises_when_output_missing_despite_zero_exit(tmp_path, monkeypatch):
     monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
 
-    def fake_run(command, capture_output, text, check, timeout):
+    def fake_run(command, **kwargs):
         result = MagicMock()
         result.returncode = 0
         result.stdout = ""
@@ -429,8 +634,8 @@ def test_convert_splat_raises_when_output_missing_despite_zero_exit(tmp_path, mo
 def test_convert_splat_raises_on_timeout(tmp_path, monkeypatch):
     monkeypatch.setattr(lichtfeld.shutil, "which", lambda name: "C:/fake/LichtFeld-Studio.exe")
 
-    def fake_run(command, capture_output, text, check, timeout):
-        raise lichtfeld.subprocess.TimeoutExpired(cmd=command, timeout=timeout)
+    def fake_run(command, **kwargs):
+        raise lichtfeld.subprocess.TimeoutExpired(cmd=command, timeout=kwargs["timeout"])
 
     monkeypatch.setattr(lichtfeld.subprocess, "run", fake_run)
 

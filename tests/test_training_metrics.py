@@ -42,7 +42,7 @@ def test_parse_training_log_returns_none_for_missing_fields():
 
 
 def test_append_training_metrics_writes_jsonl_line(tmp_path, monkeypatch):
-    monkeypatch.setenv("SPLATPREP_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("SPLATERRA_DATA_DIR", str(tmp_path))
 
     metrics = TrainingMetrics(
         job_id="job-1",
@@ -77,7 +77,7 @@ def test_append_training_metrics_writes_jsonl_line(tmp_path, monkeypatch):
 
 
 def test_append_training_metrics_appends_multiple_runs(tmp_path, monkeypatch):
-    monkeypatch.setenv("SPLATPREP_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("SPLATERRA_DATA_DIR", str(tmp_path))
 
     for job_id in ("job-1", "job-2"):
         training_metrics.append_training_metrics(

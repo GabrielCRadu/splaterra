@@ -10,6 +10,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from app.process_kill import kill_process_tree
+
 _PERCENT_RE = re.compile(r"(\d+)%\|")
 
 
@@ -89,7 +91,16 @@ def run_extraction(
         command += ["--batch-size", str(_BATCH_SIZE), "--batch-buffer", str(_BATCH_BUFFER)]
 
     process = subprocess.Popen(
-        command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        # See app/lichtfeld.py's identical Popen call for why: Windows'
+        # text=True defaults to the console codepage, not UTF-8, which can
+        # raise UnicodeDecodeError inside the reader thread on Unicode output.
+        encoding="utf-8",
+        errors="replace",
+        bufsize=1,
     )
     if on_process_start is not None:
         on_process_start(process)
@@ -103,7 +114,7 @@ def run_extraction(
     while True:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            process.kill()
+            kill_process_tree(process)
             process.wait()
             raise SharpFramesError(
                 f"sharp-frames did not finish within {timeout_seconds}s and was terminated"

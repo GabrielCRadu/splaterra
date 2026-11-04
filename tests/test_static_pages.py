@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 
 def test_index_page_contains_job_list_and_new_job_link(client):
     response = client.get("/")
@@ -183,11 +185,11 @@ def test_job_page_restarts_polling_after_each_action():
     content = (Path(__file__).resolve().parent.parent / "static" / "job.html").read_text(
         encoding="utf-8"
     )
-    # 1 initial assignment (`let stopPolling = startPolling()`) + 10 button
-    # handlers (add-clip-upload/import-frames/extract/cancel-extract/align/
-    # cancel-align/recommend/train/cancel-train/export) each reassigning it
-    # after apiPost.
-    assert content.count("stopPolling = startPolling()") == 11
+    # 1 initial assignment (`let stopPolling = startPolling()`) + 12 button
+    # handlers (add-clip-upload/import-frames/cancel-ingest/extract/
+    # cancel-extract/align/cancel-align/recommend/train/cancel-train/export/
+    # cancel-export) each reassigning it after apiPost.
+    assert content.count("stopPolling = startPolling()") == 13
 
 
 def test_job_page_contains_story_slides_for_every_stage(client):
@@ -334,3 +336,41 @@ def test_job_page_contains_export_controls(client):
     assert 'id="link-export"' in response.text
     assert 'value="spz"' in response.text
     assert 'value="sog"' in response.text
+
+
+def test_manifest_json_is_served_and_valid(client):
+    response = client.get("/manifest.json")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"]
+    assert data["start_url"] == "/"
+    assert data["display"] == "standalone"
+    icon_srcs = {icon["src"] for icon in data["icons"]}
+    assert "/icons/icon-192.png" in icon_srcs
+    assert "/icons/icon-512.png" in icon_srcs
+
+
+def test_pwa_icons_are_served(client):
+    for path in (
+        "/icons/icon-192.png",
+        "/icons/icon-512.png",
+        "/icons/icon-512-maskable.png",
+        "/icons/apple-touch-icon.png",
+        "/icons/favicon-32.png",
+    ):
+        response = client.get(path)
+        assert response.status_code == 200, path
+        assert response.headers["content-type"] == "image/png"
+
+
+@pytest.mark.parametrize(
+    "page",
+    ["/", "/new-job.html", "/job.html", "/frames.html", "/alignment.html", "/recommendation.html"],
+)
+def test_every_page_links_the_pwa_manifest_and_icons(client, page):
+    response = client.get(page)
+    assert response.status_code == 200
+    assert 'rel="manifest" href="/manifest.json"' in response.text
+    assert 'rel="apple-touch-icon" href="/icons/apple-touch-icon.png"' in response.text
+    assert 'name="theme-color" content="#050506"' in response.text
+    assert 'name="apple-mobile-web-app-capable" content="yes"' in response.text

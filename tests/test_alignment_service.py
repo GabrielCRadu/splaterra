@@ -36,6 +36,54 @@ def test_compute_alignment_updates_job_and_stage(job_store, tmp_path, monkeypatc
     assert stage.log == "aligned ok"
 
 
+def test_compute_alignment_marks_stage_failed_on_low_registration_coverage(job_store, tmp_path, monkeypatch):
+    job = job_store.create_job("Test")
+    job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"), frame_count=100)
+
+    # Only 2 of 100 frames registered - below both MIN_REGISTERED_IMAGES and
+    # MIN_REGISTRATION_RATIO, the real failure mode this check exists for
+    # (see the module-level comment: RealityScan can exit 0 with a nearly
+    # empty reconstruction that then crashes training with a cryptic error).
+    _write_fake_registered_images(tmp_path / "images", count=2)
+    fake_result = AlignmentResult(
+        sparse_dir=tmp_path / "sparse" / "0", images_dir=tmp_path / "images", log="aligned"
+    )
+    monkeypatch.setattr(alignment_service, "run_alignment", MagicMock(return_value=fake_result))
+
+    with pytest.raises(alignment_service.AlignmentError, match="prea putine"):
+        alignment_service.compute_alignment(job_store, job.id)
+
+    stage = job_store.get_stage(job.id, "alignment")
+    assert stage.status == "failed"
+    fetched = job_store.get_job(job.id)
+    assert fetched.colmap_sparse_dir is None
+
+
+def test_compute_alignment_marks_stage_failed_when_images_dir_check_raises(
+    job_store, tmp_path, monkeypatch
+):
+    # Defends against a narrow TOCTOU: run_alignment confirms images_dir
+    # exists right before returning, but the registration-coverage check
+    # reads it again afterward - if that raises (e.g. external deletion in
+    # between), it must still land as a "failed" stage, not propagate
+    # uncaught and leave the stage stuck on "running" forever.
+    job = job_store.create_job("Test")
+    job_store.update_job(job.id, frames_dir=str(tmp_path / "frames"))
+
+    fake_result = AlignmentResult(
+        sparse_dir=tmp_path / "sparse" / "0",
+        images_dir=tmp_path / "images_never_created",
+        log="aligned",
+    )
+    monkeypatch.setattr(alignment_service, "run_alignment", MagicMock(return_value=fake_result))
+
+    with pytest.raises(alignment_service.AlignmentError):
+        alignment_service.compute_alignment(job_store, job.id)
+
+    stage = job_store.get_stage(job.id, "alignment")
+    assert stage.status == "failed"
+
+
 def test_compute_alignment_without_extracted_frames_raises(job_store):
     job = job_store.create_job("Test")
 

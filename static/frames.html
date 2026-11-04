@@ -3,29 +3,74 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Cadre — Splat Prep</title>
+<title>Cadre — Splaterra</title>
 <link rel="stylesheet" href="/css/app.css" />
+<link rel="manifest" href="/manifest.json" />
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#050506" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Splaterra" />
 </head>
 <body>
+<a class="brand-logo-link" href="/" aria-label="Splaterra - meniu principal"><img class="brand-logo" src="/brand/logo-splaterra.svg" alt="Splaterra" /></a>
+<a class="home-link" id="back-to-job-link" href="#">&larr; Inapoi la job</a>
 <h1>Cadre extrase</h1>
 <p class="subtitle" id="frame-count">Se incarca...</p>
+<p class="subtitle" style="margin-top:-10px;">Tine apasat pe un cadru pentru previzualizare mare.</p>
 
 <div class="frame-grid" id="frame-grid"></div>
+
+<div class="frame-preview-overlay" id="frame-preview-overlay">
+  <img id="frame-preview-img" alt="" />
+</div>
+
+<div class="modal-overlay" id="delete-modal">
+  <div class="modal-card">
+    <div class="modal-title">Stergi cadrul?</div>
+    <div class="modal-body" id="delete-modal-text"></div>
+    <div class="modal-actions">
+      <button class="btn-danger" id="confirm-delete-btn">Sterge</button>
+      <button class="btn-ghost" id="cancel-delete-btn">Anuleaza</button>
+    </div>
+  </div>
+</div>
 
 <script src="/js/app.js"></script>
 <script>
   const jobId = jobIdFromQuery();
+  document.getElementById("back-to-job-link").href = `/job.html?id=${jobId}`;
+
+  function renderSkeleton(count) {
+    document.getElementById("frame-grid").innerHTML = Array.from({ length: count })
+      .map(() => `<div class="frame-cell"></div>`)
+      .join("");
+  }
 
   async function loadFrames() {
-    const { frames } = await apiGet(`/jobs/${jobId}/frames`);
+    renderSkeleton(9);
+    let frames;
+    try {
+      ({ frames } = await apiGet(`/jobs/${jobId}/frames`));
+    } catch (err) {
+      document.getElementById("frame-count").textContent = err.message || String(err);
+      document.getElementById("frame-grid").innerHTML = "";
+      return;
+    }
     document.getElementById("frame-count").textContent =
       frames.length === 0 ? "Niciun cadru inca" : `${frames.length} cadre`;
 
     const grid = document.getElementById("frame-grid");
     grid.innerHTML = frames
       .map(
-        (name) =>
-          `<div class="frame-cell"><img src="/jobs/${jobId}/frames/${encodeURIComponent(name)}" loading="lazy" /></div>`
+        (name) => `
+          <div class="frame-cell" data-name="${escapeHtml(name)}">
+            <img src="/jobs/${jobId}/frames/${encodeURIComponent(name)}" loading="lazy" />
+            <button class="frame-delete-btn" type="button" data-name="${escapeHtml(name)}" aria-label="Sterge cadrul">&times;</button>
+          </div>
+        `
       )
       .join("");
 
@@ -42,6 +87,91 @@
       }
     });
   }
+
+  // --- Press-and-hold large preview ---
+
+  const PREVIEW_HOLD_MS = 300;
+  let previewTimer = null;
+  let previewShown = false;
+
+  function showPreview(src) {
+    document.getElementById("frame-preview-img").src = src;
+    document.getElementById("frame-preview-overlay").classList.add("visible");
+    previewShown = true;
+  }
+
+  function hidePreview() {
+    document.getElementById("frame-preview-overlay").classList.remove("visible");
+    previewShown = false;
+  }
+
+  const grid = document.getElementById("frame-grid");
+
+  // Suppresses the native long-press context menu (Android) / image callout
+  // (iOS Safari, also handled by -webkit-touch-callout in CSS) that would
+  // otherwise fight with our own press-and-hold preview gesture.
+  grid.addEventListener("contextmenu", (event) => event.preventDefault());
+
+  grid.addEventListener("pointerdown", (event) => {
+    if (event.button !== undefined && event.button !== 0) return;
+    if (event.target.closest(".frame-delete-btn")) return;
+    const cell = event.target.closest(".frame-cell");
+    if (!cell) return;
+    const img = cell.querySelector("img");
+    if (!img) return;
+    previewTimer = setTimeout(() => showPreview(img.src), PREVIEW_HOLD_MS);
+  });
+
+  // Attached to document (not the grid) so a finger/cursor drifting off the
+  // cell before release still closes the preview - matches the drag-gesture
+  // pattern in index.html's job deletion, which tracks pointermove/up on
+  // document for the same reason.
+  ["pointerup", "pointercancel"].forEach((eventName) => {
+    document.addEventListener(eventName, () => {
+      if (previewTimer) {
+        clearTimeout(previewTimer);
+        previewTimer = null;
+      }
+      if (previewShown) hidePreview();
+    });
+  });
+
+  // --- Delete ---
+
+  let framePendingDelete = null;
+
+  function showDeleteModal(name) {
+    framePendingDelete = name;
+    document.getElementById("delete-modal-text").textContent =
+      `Cadrul "${name}" va fi sters definitiv. Nu se poate anula.`;
+    document.getElementById("delete-modal").classList.add("visible");
+  }
+
+  function hideDeleteModal() {
+    framePendingDelete = null;
+    document.getElementById("delete-modal").classList.remove("visible");
+  }
+
+  grid.addEventListener("click", (event) => {
+    const btn = event.target.closest(".frame-delete-btn");
+    if (!btn) return;
+    showDeleteModal(btn.dataset.name);
+  });
+
+  document.getElementById("cancel-delete-btn").addEventListener("click", hideDeleteModal);
+
+  document.getElementById("confirm-delete-btn").addEventListener("click", async () => {
+    const name = framePendingDelete;
+    if (!name) return;
+    hideDeleteModal();
+
+    try {
+      await apiDelete(`/jobs/${jobId}/frames/${encodeURIComponent(name)}`);
+    } catch (err) {
+      alert(err.message || String(err));
+    }
+    loadFrames();
+  });
 
   loadFrames();
 </script>

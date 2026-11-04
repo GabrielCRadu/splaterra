@@ -73,7 +73,7 @@ def test_run_alignment_uses_bundled_colmap_export_params(tmp_path, monkeypatch):
     output_dir = tmp_path / "out"
     captured_command = {}
 
-    def fake_popen(command, stdout, stderr, text):
+    def fake_popen(command, **kwargs):
         captured_command["command"] = command
         _write_fake_colmap_output(output_dir)
         return _fake_process(0, "aligned ok")
@@ -94,7 +94,7 @@ def test_run_alignment_returns_result_on_success(tmp_path, monkeypatch):
 
     output_dir = tmp_path / "out"
 
-    def fake_popen(command, stdout, stderr, text):
+    def fake_popen(command, **kwargs):
         _write_fake_colmap_output(output_dir)
         return _fake_process(0, "aligned ok")
 
@@ -107,13 +107,31 @@ def test_run_alignment_returns_result_on_success(tmp_path, monkeypatch):
     assert "aligned ok" in result.log
 
 
+def test_run_alignment_forces_utf8_decoding(tmp_path, monkeypatch):
+    monkeypatch.setattr(realityscan.shutil, "which", lambda name: "C:/fake/RealityScan.exe")
+    output_dir = tmp_path / "out"
+    captured = {}
+
+    def fake_popen(command, **kwargs):
+        captured["kwargs"] = kwargs
+        _write_fake_colmap_output(output_dir)
+        return _fake_process(0, "done")
+
+    monkeypatch.setattr(realityscan.subprocess, "Popen", fake_popen)
+
+    realityscan.run_alignment(tmp_path / "frames", output_dir)
+
+    assert captured["kwargs"]["encoding"] == "utf-8"
+    assert captured["kwargs"]["errors"] == "replace"
+
+
 def test_run_alignment_calls_on_process_start_with_the_popen_object(tmp_path, monkeypatch):
     monkeypatch.setattr(realityscan.shutil, "which", lambda name: "C:/fake/RealityScan.exe")
 
     output_dir = tmp_path / "out"
     fake_process = _fake_process(0, "aligned ok")
 
-    def fake_popen(command, stdout, stderr, text):
+    def fake_popen(command, **kwargs):
         _write_fake_colmap_output(output_dir)
         return fake_process
 
@@ -141,7 +159,7 @@ def test_run_alignment_reports_progress_from_progress_file(tmp_path, monkeypatch
         "65536 0.30 0.02 0.05 #progress\n65536 0.90 0.04 0.01 #progress\n"
     )
 
-    def fake_popen(command, stdout, stderr, text):
+    def fake_popen(command, **kwargs):
         _write_fake_colmap_output(output_dir)
         return _fake_process(0, "aligned ok")
 
@@ -160,7 +178,7 @@ def test_run_alignment_calls_on_log_with_accumulated_output(tmp_path, monkeypatc
 
     output_dir = tmp_path / "out"
 
-    def fake_popen(command, stdout, stderr, text):
+    def fake_popen(command, **kwargs):
         _write_fake_colmap_output(output_dir)
         return _fake_process(0, "line one\nline two")
 
@@ -187,7 +205,7 @@ def test_run_alignment_calls_on_log_with_accumulated_output(tmp_path, monkeypatc
 def test_run_alignment_raises_on_nonzero_exit(tmp_path, monkeypatch):
     monkeypatch.setattr(realityscan.shutil, "which", lambda name: "C:/fake/RealityScan.exe")
 
-    def fake_popen(command, stdout, stderr, text):
+    def fake_popen(command, **kwargs):
         return _fake_process(5, "export failed: no valid reconstruction")
 
     monkeypatch.setattr(realityscan.subprocess, "Popen", fake_popen)
@@ -199,7 +217,7 @@ def test_run_alignment_raises_on_nonzero_exit(tmp_path, monkeypatch):
 def test_run_alignment_raises_when_output_files_missing_despite_zero_exit(tmp_path, monkeypatch):
     monkeypatch.setattr(realityscan.shutil, "which", lambda name: "C:/fake/RealityScan.exe")
 
-    def fake_popen(command, stdout, stderr, text):
+    def fake_popen(command, **kwargs):
         return _fake_process(0, "")
 
     monkeypatch.setattr(realityscan.subprocess, "Popen", fake_popen)
@@ -210,6 +228,10 @@ def test_run_alignment_raises_when_output_files_missing_despite_zero_exit(tmp_pa
 
 def test_run_alignment_raises_on_timeout(tmp_path, monkeypatch):
     monkeypatch.setattr(realityscan.shutil, "which", lambda name: "C:/fake/RealityScan.exe")
+    # kill_process_tree talks to the real OS via psutil.Process(pid) - not
+    # meaningful against a MagicMock's fake pid, and already covered for real
+    # in tests/test_process_kill.py.
+    monkeypatch.setattr(realityscan, "kill_process_tree", MagicMock())
 
     # This reader thread outlives this test (HangingStdout never reaches EOF,
     # so it's never joined) - see docs/ISSUES.md and test_lichtfeld.py's
@@ -220,7 +242,7 @@ def test_run_alignment_raises_on_timeout(tmp_path, monkeypatch):
             _REAL_SLEEP(0.01)
             return " "  # never EOF, never \r or \n
 
-    def fake_popen(command, stdout, stderr, text):
+    def fake_popen(command, **kwargs):
         process = MagicMock()
         process.stdout = HangingStdout()
         process.kill = MagicMock()

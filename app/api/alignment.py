@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 
-from app import process_registry
 from app.alignment_service import compute_alignment
-from app.deps import get_job_store, run_with_new_store
+from app.deps import cancel_or_force_fail, claim_stage_or_409, get_job_store, run_with_new_store
 from app.job_store import JobStore
 
 router = APIRouter(prefix="/jobs", tags=["alignment"])
@@ -18,12 +17,7 @@ def align_endpoint(
 ) -> dict[str, str]:
     if store.get_job(job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    stage = store.get_stage(job_id, "alignment")
-    if stage is not None and stage.status == "running":
-        # See train_endpoint's identical guard in app/api/training.py for why:
-        # process_registry only tracks one subprocess per (job_id, stage), so
-        # a second concurrent run silently orphans the first from cancellation.
-        raise HTTPException(status_code=409, detail="Alignment is already running for this job")
+    claim_stage_or_409(store, job_id, "alignment", "Alignment is already running for this job")
     background_tasks.add_task(run_with_new_store, compute_alignment, job_id)
     return {"status": "started"}
 
@@ -34,7 +28,7 @@ def cancel_align_endpoint(
 ) -> dict[str, bool]:
     if store.get_job(job_id) is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    return {"cancelled": process_registry.cancel(job_id, "alignment")}
+    return {"cancelled": cancel_or_force_fail(store, job_id, "alignment")}
 
 
 @router.get("/{job_id}/alignment")

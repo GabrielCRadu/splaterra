@@ -7,3 +7,4 @@ python-multipart>=0.0.12
 sharp-frames>=0.4.0
 psutil>=6.0
 runpod>=1.7
+requests>=2.31

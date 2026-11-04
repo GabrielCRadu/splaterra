@@ -2,20 +2,14 @@ from __future__ import annotations
 
 import os
 import time
-from dataclasses import dataclass
 
 import runpod
+
+from app.remote_exec import PodConnection
 
 
 class RunPodError(Exception):
     pass
-
-
-@dataclass
-class PodConnection:
-    pod_id: str
-    ssh_host: str
-    ssh_port: int
 
 
 def _api_key() -> str:

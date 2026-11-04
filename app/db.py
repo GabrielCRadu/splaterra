@@ -32,13 +32,15 @@ CREATE TABLE IF NOT EXISTS job_stages (
     log TEXT,
     error TEXT,
     progress_percent REAL,
+    settings_json TEXT,
+    eval_metrics_json TEXT,
     UNIQUE(job_id, stage)
 );
 """
 
 
 def db_path() -> Path:
-    return data_root() / "splatprep.db"
+    return data_root() / "splaterra.db"
 
 
 def connect(path: Path | None = None) -> sqlite3.Connection:
@@ -62,7 +64,7 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
 def _migrate(conn: sqlite3.Connection) -> None:
     # CREATE TABLE IF NOT EXISTS never adds columns to an already-existing
     # table. Earlier schema changes could just delete the dev DB since it had
-    # no real data yet - data/splatprep.db now holds real trained jobs, so
+    # no real data yet - data/splaterra.db now holds real trained jobs, so
     # new nullable columns get an idempotent ALTER TABLE here instead.
     existing_columns = {row["name"] for row in conn.execute("PRAGMA table_info(jobs)")}
     for column in ("export_path", "export_format"):
@@ -75,4 +77,10 @@ def _migrate(conn: sqlite3.Connection) -> None:
     # everywhere device_type is compared against "standard".
     if "device_type" not in existing_columns:
         conn.execute("ALTER TABLE jobs ADD COLUMN device_type TEXT NOT NULL DEFAULT 'standard'")
+
+    existing_stage_columns = {row["name"] for row in conn.execute("PRAGMA table_info(job_stages)")}
+    if "settings_json" not in existing_stage_columns:
+        conn.execute("ALTER TABLE job_stages ADD COLUMN settings_json TEXT")
+    if "eval_metrics_json" not in existing_stage_columns:
+        conn.execute("ALTER TABLE job_stages ADD COLUMN eval_metrics_json TEXT")
     conn.commit()

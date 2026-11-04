@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from app.deps import get_job_store, run_with_new_store
+from app.deps import cancel_or_force_fail, get_job_store, run_with_new_store
 from app.ingestion import import_local_file, list_raw_videos, probe_ingested_video
 from app.job_store import JobStore
 from app.uploads import UploadError, complete_upload, received_chunks, save_chunk, start_upload
@@ -34,6 +34,21 @@ def ingest_local(
         raise HTTPException(status_code=404, detail="Job not found")
     background_tasks.add_task(run_with_new_store, import_local_file, job_id, Path(body.source_path))
     return {"status": "started"}
+
+
+@router.post("/{job_id}/ingest/cancel")
+def cancel_ingestion_endpoint(
+    job_id: str, store: JobStore = Depends(get_job_store)
+) -> dict[str, bool]:
+    if store.get_job(job_id) is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    # Neither import path (local copy, upload finalize) ever registers a
+    # process - they're blocking file I/O, not a subprocess - so this can
+    # only ever clear a stuck "running" row (see cancel_or_force_fail), never
+    # actually interrupt a genuinely in-progress copy. That copy would just
+    # overwrite this back to "done" a moment later if it was still live,
+    # which is an acceptable, rare, benign race for how fast these are.
+    return {"cancelled": cancel_or_force_fail(store, job_id, "ingestion")}
 
 
 @router.get("/{job_id}/raw-videos")

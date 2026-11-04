@@ -30,3 +30,5 @@ class JobStage:
     log: str | None = None
     error: str | None = None
     progress_percent: float | None = None
+    settings_json: str | None = None
+    eval_metrics_json: str | None = None

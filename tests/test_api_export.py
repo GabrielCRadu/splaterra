@@ -28,6 +28,20 @@ def test_export_endpoint_unknown_job_returns_404(client):
     assert response.status_code == 404
 
 
+def test_export_endpoint_rejects_second_request_while_already_running(client):
+    from app import db
+    from app.job_store import JobStore
+
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+    conn = db.connect()
+    JobStore(conn).upsert_stage(job_id, "export", "running", started_at="2026-01-01T00:00:00Z")
+    conn.close()
+
+    response = client.post(f"/jobs/{job_id}/export", json={"format": "spz"})
+
+    assert response.status_code == 409
+
+
 def test_get_export_not_yet_computed_returns_404(client):
     job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
     response = client.get(f"/jobs/{job_id}/export")
@@ -91,4 +105,37 @@ def test_download_export_result_missing_on_disk_returns_404(client, tmp_path):
     conn.close()
 
     response = client.get(f"/jobs/{job_id}/export/download")
+    assert response.status_code == 404
+
+
+def test_cancel_export_endpoint_clears_orphaned_running_stage(client):
+    from app import db
+    from app.job_store import JobStore
+
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+    conn = db.connect()
+    JobStore(conn).upsert_stage(job_id, "export", "running", started_at="2026-01-01T00:00:00Z")
+    conn.close()
+
+    response = client.post(f"/jobs/{job_id}/export/cancel")
+
+    assert response.status_code == 200
+    assert response.json() == {"cancelled": True}
+
+    stages = client.get(f"/jobs/{job_id}/stages").json()
+    export_stage = next(s for s in stages if s["stage"] == "export")
+    assert export_stage["status"] == "failed"
+
+
+def test_cancel_export_endpoint_returns_false_when_nothing_running(client):
+    job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
+
+    response = client.post(f"/jobs/{job_id}/export/cancel")
+
+    assert response.status_code == 200
+    assert response.json() == {"cancelled": False}
+
+
+def test_cancel_export_endpoint_unknown_job_returns_404(client):
+    response = client.post("/jobs/does-not-exist/export/cancel")
     assert response.status_code == 404

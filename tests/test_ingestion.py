@@ -45,6 +45,19 @@ def test_import_local_file_missing_source_records_failed_stage(job_store, tmp_pa
     assert stage.error is not None
 
 
+def test_import_local_file_rejects_osv_extension(job_store, tmp_path):
+    job = job_store.create_job("Test", device_type="dji_avata_360")
+    source = tmp_path / "clip.OSV"
+    source.write_bytes(b"raw dual-fisheye")
+
+    with pytest.raises(IngestionError, match="OSV"):
+        import_local_file(job_store, job.id, source)
+
+    stage = job_store.get_stage(job.id, "ingestion")
+    assert stage.status == "failed"
+    assert "OSV" in stage.error
+
+
 def test_list_raw_videos_returns_empty_when_no_raw_dir(job_store):
     job = job_store.create_job("Test")
     assert list_raw_videos(job.id) == []

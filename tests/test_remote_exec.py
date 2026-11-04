@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from app import remote_exec
-from app.runpod_client import PodConnection
+from app.remote_exec import PodConnection
 
 CONNECTION = PodConnection(pod_id="pod-123", ssh_host="1.2.3.4", ssh_port=40001)
 
@@ -17,7 +17,7 @@ def test_run_remote_command_raises_when_ssh_missing(monkeypatch):
 def test_run_remote_command_returns_output_on_success(monkeypatch):
     monkeypatch.setattr(remote_exec.shutil, "which", lambda name: "/usr/bin/ssh")
 
-    def fake_run(command, capture_output, text, check, timeout):
+    def fake_run(command, **kwargs):
         result = MagicMock()
         result.returncode = 0
         result.stdout = "hi\n"
@@ -34,7 +34,7 @@ def test_run_remote_command_returns_output_on_success(monkeypatch):
 def test_run_remote_command_raises_on_nonzero_exit(monkeypatch):
     monkeypatch.setattr(remote_exec.shutil, "which", lambda name: "/usr/bin/ssh")
 
-    def fake_run(command, capture_output, text, check, timeout):
+    def fake_run(command, **kwargs):
         result = MagicMock()
         result.returncode = 1
         result.stdout = ""
@@ -50,8 +50,8 @@ def test_run_remote_command_raises_on_nonzero_exit(monkeypatch):
 def test_run_remote_command_raises_on_timeout(monkeypatch):
     monkeypatch.setattr(remote_exec.shutil, "which", lambda name: "/usr/bin/ssh")
 
-    def fake_run(command, capture_output, text, check, timeout):
-        raise remote_exec.subprocess.TimeoutExpired(cmd=command, timeout=timeout)
+    def fake_run(command, **kwargs):
+        raise remote_exec.subprocess.TimeoutExpired(cmd=command, timeout=kwargs["timeout"])
 
     monkeypatch.setattr(remote_exec.subprocess, "run", fake_run)
 
@@ -69,7 +69,7 @@ def test_upload_directory_builds_correct_scp_command(tmp_path, monkeypatch):
     monkeypatch.setattr(remote_exec.shutil, "which", lambda name: "/usr/bin/scp")
     captured = {}
 
-    def fake_run(command, capture_output, text, check, timeout):
+    def fake_run(command, **kwargs):
         captured["command"] = command
         result = MagicMock()
         result.returncode = 0
@@ -92,7 +92,7 @@ def test_download_directory_creates_local_dir_and_builds_command(tmp_path, monke
     monkeypatch.setattr(remote_exec.shutil, "which", lambda name: "/usr/bin/scp")
     local_dir = tmp_path / "results"
 
-    def fake_run(command, capture_output, text, check, timeout):
+    def fake_run(command, **kwargs):
         result = MagicMock()
         result.returncode = 0
         result.stdout = ""

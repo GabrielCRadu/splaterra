@@ -53,6 +53,8 @@ def test_cancel_align_endpoint_kills_registered_process(client, monkeypatch):
 
     from app import process_registry
 
+    kill_mock = MagicMock()
+    monkeypatch.setattr(process_registry, "kill_process_tree", kill_mock)
     job_id = client.post("/jobs", json={"name": "Test"}).json()["id"]
     process = MagicMock()
     process.poll.return_value = None
@@ -62,7 +64,7 @@ def test_cancel_align_endpoint_kills_registered_process(client, monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == {"cancelled": True}
-    process.kill.assert_called_once()
+    kill_mock.assert_called_once_with(process)
     process_registry.unregister(job_id, "alignment")
 
 

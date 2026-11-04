@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 def data_root() -> Path:
-    return Path(os.environ.get("SPLATPREP_DATA_DIR", "./data")).resolve()
+    return Path(os.environ.get("SPLATERRA_DATA_DIR", "./data")).resolve()
 
 
 def job_dir(job_id: str) -> Path:

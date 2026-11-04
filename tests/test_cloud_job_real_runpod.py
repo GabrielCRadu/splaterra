@@ -6,7 +6,7 @@ import pytest
 from app.cloud_job import run_cloud_job
 
 _RUNPOD_API_KEY = os.environ.get("RUNPOD_API_KEY")
-_OPTED_IN = os.environ.get("SPLATPREP_RUN_REAL_RUNPOD_TEST") == "1"
+_OPTED_IN = os.environ.get("SPLATERRA_RUN_REAL_RUNPOD_TEST") == "1"
 _SSH = shutil.which("ssh")
 _SCP = shutil.which("scp")
 
@@ -17,7 +17,7 @@ _SCP = shutil.which("scp")
         "Real RunPod smoke test skipped by default - it creates and briefly bills a real "
         "GPU pod. To run it deliberately: set RUNPOD_API_KEY, add your SSH public key to "
         "your RunPod account (Settings -> SSH Public Keys), and set "
-        "SPLATPREP_RUN_REAL_RUNPOD_TEST=1. Verify the gpu_type_id below is still a valid, "
+        "SPLATERRA_RUN_REAL_RUNPOD_TEST=1. Verify the gpu_type_id below is still a valid, "
         "orderable GPU type on your RunPod account before running - GPU catalogs change."
     ),
 )

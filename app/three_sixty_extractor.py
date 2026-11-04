@@ -3,12 +3,15 @@ from __future__ import annotations
 import os
 import queue
 import re
+import shutil
 import subprocess
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+
+from app.process_kill import kill_process_tree
 
 # 360Extractor's real stdout progress format has never been observed against
 # a real run - this is a generic best-effort guess, same honesty as
@@ -28,19 +31,22 @@ class ThreeSixtyExtractionResult:
     log: str
 
 
-# Fixed for Phase 1, not exposed as UI settings - first-pass choices with no
-# real 360Extractor run behind them yet, not measured constants:
-#   - cube/6: the most predictable full-sphere coverage (6 cube faces),
-#     simplest to reason about without real-run data to compare layouts.
-#   - jpg: matches sharp-frames' own output format, keeps downstream code
-#     (frames_dir globbing, static/frames.html's image-suffix handling)
-#     unchanged regardless of which extractor produced the frames.
-#   - no --resolution flag at all: leaving 360Extractor's own default is a
-#     smaller commitment than guessing a number with nothing to anchor it.
-# Recalibrate once real Avata/Osmo footage has gone through this.
-_LAYOUT = "cube"
-_CAMERA_COUNT = 6
+# jpg matches sharp-frames' own output format, keeps downstream code
+# (frames_dir globbing, static/frames.html's image-suffix handling) unchanged
+# regardless of which extractor produced the frames - not exposed as a UI
+# setting, no reason to ever change it.
 _FORMAT = "jpg"
+
+# --active-cameras takes comma-separated camera *indices*, not face names
+# (confirmed against the installed tool's --help - only --ai-mask-cameras
+# takes names). Index 4 = Up for the cube layout - verified directly against
+# a real run (`--active-cameras 4` alone produced only a "..._Up.jpg" file),
+# not just inferred from --ai-mask-cameras' documented face order. Only valid
+# for the cube layout (docs/SETTINGS.md documents cube as the only layout
+# with a fixed "Up" face; ring/fibonacci distribute cameras differently with
+# no equivalent fixed index) - callers must not combine this with a non-cube
+# layout, see the skip_up_frames handling below.
+_ACTIVE_CAMERAS_EXCLUDING_UP = "0,1,2,3,5"
 
 
 def _three_sixty_extractor_paths() -> tuple[Path, Path]:
@@ -50,12 +56,12 @@ def _three_sixty_extractor_paths() -> tuple[Path, Path]:
     # heavy/isolated dependency set (PyTorch, OpenCV, PySide6, optional CUDA)
     # that must not touch this app's own venv. The owner sets up the clone +
     # its dedicated venv themselves, outside this app.
-    install_dir = os.environ.get("SPLATPREP_360EXTRACTOR_DIR")
+    install_dir = os.environ.get("SPLATERRA_360EXTRACTOR_DIR")
     if install_dir is None:
         raise ThreeSixtyExtractorError(
             "360Extractor not configured. Clone "
             "https://github.com/nicolasdiolez/360Extractor, set up its own venv per the "
-            "repo's README, then set SPLATPREP_360EXTRACTOR_DIR to the clone root "
+            "repo's README, then set SPLATERRA_360EXTRACTOR_DIR to the clone root "
             "(the directory containing src/main.py and venv/)."
         )
     root = Path(install_dir)
@@ -63,7 +69,7 @@ def _three_sixty_extractor_paths() -> tuple[Path, Path]:
     main_script = root / "src" / "main.py"
     if not python_exe.is_file() or not main_script.is_file():
         raise ThreeSixtyExtractorError(
-            f"SPLATPREP_360EXTRACTOR_DIR is set to {root}, but {python_exe} or {main_script} "
+            f"SPLATERRA_360EXTRACTOR_DIR is set to {root}, but {python_exe} or {main_script} "
             "was not found. Verify the clone and its venv are set up per the repo's README."
         )
     return python_exe, main_script
@@ -89,6 +95,11 @@ def run_360_extraction(
     *,
     interval_seconds: float = 1.0,
     ai_mask: bool = False,
+    skip_up_frames: bool = False,
+    layout: str = "cube",
+    camera_count: int = 6,
+    resolution: int | None = None,
+    nadir_mask: bool = False,
     on_progress: Callable[[float], None] | None = None,
     on_log: Callable[[str], None] | None = None,
     on_process_start: Callable[[subprocess.Popen], None] | None = None,
@@ -111,17 +122,42 @@ def run_360_extraction(
         "--interval",
         str(interval_seconds),
         "--layout",
-        _LAYOUT,
+        layout,
+        # The real tool ignores --camera-count for the cube layout (forces 6
+        # regardless - confirmed in docs/SETTINGS.md) - passed unconditionally
+        # anyway since that's harmless and keeps this call site simple; the
+        # UI is what actually disables the control for cube.
         "--camera-count",
-        str(_CAMERA_COUNT),
+        str(camera_count),
         "--format",
         _FORMAT,
     ]
+    if resolution is not None:
+        command += ["--resolution", str(resolution)]
+    if nadir_mask:
+        command.append("--nadir-mask")
     if ai_mask:
         command.append("--ai-mask")
+    if skip_up_frames and layout == "cube":
+        # _ACTIVE_CAMERAS_EXCLUDING_UP is calibrated specifically for the cube
+        # layout's fixed index 4 = Up - silently ignored for ring/fibonacci
+        # rather than sending a meaningless index for those layouts (the UI
+        # already only offers this checkbox when layout is cube).
+        command += ["--active-cameras", _ACTIVE_CAMERAS_EXCLUDING_UP]
 
     process = subprocess.Popen(
-        command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        # See app/lichtfeld.py's identical Popen call for why: Windows'
+        # text=True defaults to the console codepage, not UTF-8. This tool's
+        # own tqdm progress bars are exactly the kind of output that can
+        # trigger it, given the emoji/UnicodeEncodeError already seen from
+        # this same tool's setup script under the default codepage.
+        encoding="utf-8",
+        errors="replace",
+        bufsize=1,
     )
     if on_process_start is not None:
         on_process_start(process)
@@ -136,7 +172,7 @@ def run_360_extraction(
     while True:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            process.kill()
+            kill_process_tree(process)
             process.wait()
             raise ThreeSixtyExtractorError(
                 f"360Extractor did not finish within {timeout_seconds}s and was terminated"
@@ -166,8 +202,30 @@ def run_360_extraction(
     if returncode != 0:
         raise ThreeSixtyExtractorError(f"360Extractor exited with {returncode}:\n{log}")
 
-    frames = sorted(output_dir.glob(f"*.{_FORMAT}"))
+    # 360Extractor writes into a "<video_stem>_processed/" subfolder of
+    # --output, not flat into it (confirmed against a real run) - rglob to
+    # find frames regardless of nesting depth.
+    frames = sorted(output_dir.rglob(f"*.{_FORMAT}"))
     if not frames:
         raise ThreeSixtyExtractorError(f"360Extractor produced no frames:\n{log}")
+
+    # Flatten into output_dir itself: every other frame producer (sharp-frames,
+    # import_local_frames) writes flat, and RealityScan/the frames API/frames.html
+    # all assume frames_dir(job_id) is flat with no subfolders - keeping that
+    # invariant here means the rest of the pipeline never has to know a 360
+    # extraction happened.
+    flattened: list[Path] = []
+    for frame in frames:
+        if frame.parent != output_dir:
+            target = output_dir / frame.name
+            frame.rename(target)
+            flattened.append(target)
+        else:
+            flattened.append(frame)
+    frames = sorted(flattened)
+
+    for child in output_dir.iterdir():
+        if child.is_dir():
+            shutil.rmtree(child, ignore_errors=True)
 
     return ThreeSixtyExtractionResult(frames=frames, log=log)

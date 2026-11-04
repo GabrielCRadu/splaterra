@@ -25,7 +25,7 @@ def test_detect_hardware_parses_gpu_info(monkeypatch):
         hardware.psutil, "virtual_memory", lambda: SimpleNamespace(total=34359738368)
     )
 
-    def fake_run(command, capture_output, text, check, timeout):
+    def fake_run(command, **kwargs):
         result = MagicMock()
         result.returncode = 0
         result.stdout = "NVIDIA GeForce RTX 4080, 16376, 8.9\n"
@@ -51,7 +51,7 @@ def test_detect_hardware_no_gpu_when_nvidia_smi_fails(monkeypatch):
         hardware.psutil, "virtual_memory", lambda: SimpleNamespace(total=8589934592)
     )
 
-    def fake_run(command, capture_output, text, check, timeout):
+    def fake_run(command, **kwargs):
         result = MagicMock()
         result.returncode = 1
         result.stdout = ""
@@ -76,7 +76,7 @@ def test_sample_usage_parses_cpu_ram_and_gpu(monkeypatch):
     )
     monkeypatch.setattr(hardware.shutil, "which", lambda name: "/usr/bin/nvidia-smi")
 
-    def fake_run(command, capture_output, text, check, timeout):
+    def fake_run(command, **kwargs):
         result = MagicMock()
         result.returncode = 0
         result.stdout = "95, 9637, 12288\n"
@@ -120,7 +120,7 @@ def test_sample_usage_gpu_fields_none_when_nvidia_smi_fails(monkeypatch):
     )
     monkeypatch.setattr(hardware.shutil, "which", lambda name: "/usr/bin/nvidia-smi")
 
-    def fake_run(command, capture_output, text, check, timeout):
+    def fake_run(command, **kwargs):
         result = MagicMock()
         result.returncode = 1
         result.stdout = ""

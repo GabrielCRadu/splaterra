@@ -41,6 +41,16 @@ def import_local_file(store: JobStore, job_id: str, source_path: Path) -> Path:
         message = f"Source file not found: {source_path}"
         store.upsert_stage(job_id, "ingestion", "failed", started_at=_now(), finished_at=_now(), error=message)
         raise IngestionError(message)
+    if source_path.suffix.lower() == ".osv":
+        # See app/uploads.py::start_upload's identical check - same Phase 1
+        # limitation (only already-stitched equirectangular footage), just
+        # on the local-import path instead of chunked upload.
+        message = (
+            "Fisierele .OSV (dual-fisheye brut) nu sunt suportate. Stitch-uieste clipul in "
+            "DJI Studio (export echirectangular) inainte sa il importi aici."
+        )
+        store.upsert_stage(job_id, "ingestion", "failed", started_at=_now(), finished_at=_now(), error=message)
+        raise IngestionError(message)
 
     destination_dir = raw_dir(job_id)
     destination_dir.mkdir(parents=True, exist_ok=True)

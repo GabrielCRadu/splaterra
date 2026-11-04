@@ -3,10 +3,20 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Alignment — Splat Prep</title>
+<title>Alignment — Splaterra</title>
 <link rel="stylesheet" href="/css/app.css" />
+<link rel="manifest" href="/manifest.json" />
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+<link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#050506" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Splaterra" />
 </head>
 <body>
+<a class="brand-logo-link" href="/" aria-label="Splaterra - meniu principal"><img class="brand-logo" src="/brand/logo-splaterra.svg" alt="Splaterra" /></a>
+<a class="home-link" id="back-to-job-link" href="#">&larr; Inapoi la job</a>
 <h1>Alignment</h1>
 <p class="subtitle" id="status">Se incarca...</p>
 
@@ -15,6 +25,7 @@
 <script src="/js/app.js"></script>
 <script>
   const jobId = jobIdFromQuery();
+  document.getElementById("back-to-job-link").href = `/job.html?id=${jobId}`;
 
   async function load() {
     try {

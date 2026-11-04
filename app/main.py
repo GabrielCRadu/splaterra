@@ -12,7 +12,7 @@ from app.api.jobs import router as jobs_router
 from app.api.recommendation import router as recommendation_router
 from app.api.training import router as training_router
 
-app = FastAPI(title="Splat Prep")
+app = FastAPI(title="Splaterra")
 app.include_router(jobs_router)
 app.include_router(ingestion_router)
 app.include_router(frames_router)

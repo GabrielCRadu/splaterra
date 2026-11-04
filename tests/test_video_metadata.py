@@ -31,7 +31,7 @@ def test_probe_video_raises_when_binary_missing(tmp_path, monkeypatch):
 def test_probe_video_parses_resolution_fps_duration_codec(tmp_path, monkeypatch):
     monkeypatch.setattr(video_metadata.shutil, "which", lambda name: "/usr/bin/ffprobe")
 
-    def fake_run(command, capture_output, text, check):
+    def fake_run(command, **kwargs):
         result = MagicMock()
         result.returncode = 0
         result.stdout = FFPROBE_OUTPUT_1080P_30FPS
@@ -52,7 +52,7 @@ def test_probe_video_parses_resolution_fps_duration_codec(tmp_path, monkeypatch)
 def test_probe_video_raises_on_nonzero_exit(tmp_path, monkeypatch):
     monkeypatch.setattr(video_metadata.shutil, "which", lambda name: "/usr/bin/ffprobe")
 
-    def fake_run(command, capture_output, text, check):
+    def fake_run(command, **kwargs):
         result = MagicMock()
         result.returncode = 1
         result.stdout = ""
@@ -68,7 +68,7 @@ def test_probe_video_raises_on_nonzero_exit(tmp_path, monkeypatch):
 def test_probe_video_raises_when_no_video_stream(tmp_path, monkeypatch):
     monkeypatch.setattr(video_metadata.shutil, "which", lambda name: "/usr/bin/ffprobe")
 
-    def fake_run(command, capture_output, text, check):
+    def fake_run(command, **kwargs):
         result = MagicMock()
         result.returncode = 0
         result.stdout = json.dumps({"streams": [{"codec_type": "audio"}], "format": {}})

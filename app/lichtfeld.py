@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import os
 import queue
 import re
@@ -10,6 +11,8 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+
+from app.process_kill import kill_process_tree
 
 # Best-effort progress patterns, tried in order against each line/chunk read
 # from stdout. The exact format LichtFeld Studio prints during headless
@@ -38,20 +41,50 @@ class LichtFeldError(Exception):
 class TrainingResult:
     splat_path: Path
     log: str
+    eval_metrics: list[dict[str, float | int]] | None = None
+
+
+def parse_eval_metrics(output_dir: Path) -> list[dict[str, float | int]] | None:
+    # With --eval, LichtFeld writes its own structured metrics.csv into
+    # --output-path (header: iteration,psnr,ssim,time_per_image,num_gaussians
+    # - confirmed against MetricsReporter in the real LichtFeld-Studio source,
+    # src/training/metrics/metrics.cpp). Reading this real file is far more
+    # reliable than regexing the LOG_INFO-prefixed stdout line it also prints
+    # (metrics.to_string() goes through the logger, whose exact timestamp/level
+    # prefix format was never confirmed against a real run).
+    csv_path = output_dir / "metrics.csv"
+    if not csv_path.is_file():
+        return None
+    rows: list[dict[str, float | int]] = []
+    with csv_path.open(newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            try:
+                rows.append(
+                    {
+                        "iteration": int(row["iteration"]),
+                        "psnr": float(row["psnr"]),
+                        "ssim": float(row["ssim"]),
+                        "time_per_image": float(row["time_per_image"]),
+                        "num_gaussians": int(row["num_gaussians"]),
+                    }
+                )
+            except (KeyError, ValueError):
+                continue
+    return rows or None
 
 
 def _lichtfeld_binary() -> str:
     binary = shutil.which("LichtFeld-Studio")
     if binary is not None:
         return binary
-    install_dir = os.environ.get("SPLATPREP_LICHTFELD_DIR")
+    install_dir = os.environ.get("SPLATERRA_LICHTFELD_DIR")
     if install_dir is not None:
         candidate = Path(install_dir) / "bin" / "LichtFeld-Studio.exe"
         if candidate.is_file():
             return str(candidate)
     raise LichtFeldError(
-        "LichtFeld Studio not found on PATH or via SPLATPREP_LICHTFELD_DIR. "
-        "Add its install folder to PATH, or set SPLATPREP_LICHTFELD_DIR to the "
+        "LichtFeld Studio not found on PATH or via SPLATERRA_LICHTFELD_DIR. "
+        "Add its install folder to PATH, or set SPLATERRA_LICHTFELD_DIR to the "
         "LichtFeld Studio install root (the directory containing bin/LichtFeld-Studio.exe)."
     )
 
@@ -90,21 +123,24 @@ def _reader_thread(stream, output_queue: queue.Queue) -> None:
     output_queue.put(None)  # sentinel: stream closed
 
 
-def run_training(
-    data_path: Path,
-    output_dir: Path,
+def build_training_command(
+    binary: str,
+    data_path: str,
+    output_dir: str,
     *,
     max_gaussians: int | None = None,
+    iterations: int | None = None,
     bilateral_grid: bool = False,
-    resize_factor: int = 1,
-    timeout_seconds: int = 7200,
-    on_progress: Callable[[float], None] | None = None,
-    on_process_start: Callable[[subprocess.Popen], None] | None = None,
-    on_log: Callable[[str], None] | None = None,
-) -> TrainingResult:
-    binary = _lichtfeld_binary()
-    output_dir.mkdir(parents=True, exist_ok=True)
-
+    resize_factor: int | None = None,
+    eval: bool = False,
+    test_every: int | None = None,
+) -> list[str]:
+    # Shared by run_training() below (binary = the resolved local .exe path)
+    # and app/cloud_training.py's cloud path (binary = just "LichtFeld-Studio",
+    # assumed on PATH inside whatever Docker image the pod was created from -
+    # there's no local-install-dir discovery to do on a remote container) -
+    # every flag past the binary/data/output paths is identical either way.
+    #
     # --headless --train together start training immediately with no GUI and
     # exit when done - confirmed against a real 30000-iteration training run
     # (see docs/ISSUES.md).
@@ -113,27 +149,86 @@ def run_training(
         "--headless",
         "--train",
         "--no-splash",
-        "-d", str(data_path),
-        "-o", str(output_dir),
+        "-d", data_path,
+        "-o", output_dir,
         "--log-level", "info",
     ]
     if max_gaussians is not None:
         command += ["--max-cap", str(max_gaussians)]
+    if iterations is not None:
+        command += ["--iter", str(iterations)]
     if bilateral_grid:
         # Compensates for per-image exposure/white-balance variation during
         # training (auto-exposure cameras, clips shot under different
         # settings) - the bilateral grid appearance-correction technique from
         # recent Gaussian Splatting/NeRF literature.
         command.append("--bilateral-grid")
-    if resize_factor != 1:
-        # LichtFeld's own default is "auto", which wasn't aggressive enough
-        # to avoid a real CUDA OOM on a large multi-clip job (see
-        # app/recommendation.py's training_resize_factor) - pass an explicit
-        # value instead of trusting auto-detection for large datasets.
+    if resize_factor is not None:
+        # LichtFeld's own default is "auto" (flag omitted), which wasn't
+        # aggressive enough to avoid a real CUDA OOM on a large multi-clip
+        # job (see app/recommendation.py's training_resize_factor) - pass an
+        # explicit value instead of trusting auto-detection for large
+        # datasets. None (not "== 1") is the auto/omit sentinel so an
+        # explicit resize_factor=1 (force full resolution) is still passed
+        # through literally rather than silently falling back to auto.
         command += ["--resize_factor", str(resize_factor)]
+    if eval:
+        # Holds out every Nth image (--test-every, LichtFeld's own default 8)
+        # as a validation set and scores PSNR/SSIM against it at fixed
+        # iterations (LichtFeld's own default eval_steps: 7000 and 30000 -
+        # not exposed as a CLI flag, confirmed against the real source,
+        # src/core/include/core/parameters.hpp) instead of only ever
+        # comparing renders by eye - see parse_eval_metrics() below for
+        # where the actual numbers get read back after the run.
+        command.append("--eval")
+    if test_every is not None:
+        command += ["--test-every", str(test_every)]
+    return command
 
+
+def run_training(
+    data_path: Path,
+    output_dir: Path,
+    *,
+    max_gaussians: int | None = None,
+    iterations: int | None = None,
+    bilateral_grid: bool = False,
+    resize_factor: int | None = None,
+    eval: bool = False,
+    test_every: int | None = None,
+    timeout_seconds: int = 7200,
+    on_progress: Callable[[float], None] | None = None,
+    on_process_start: Callable[[subprocess.Popen], None] | None = None,
+    on_log: Callable[[str], None] | None = None,
+) -> TrainingResult:
+    binary = _lichtfeld_binary()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    command = build_training_command(
+        binary, str(data_path), str(output_dir),
+        max_gaussians=max_gaussians, iterations=iterations, bilateral_grid=bilateral_grid,
+        resize_factor=resize_factor, eval=eval, test_every=test_every,
+    )
+
+    # Wall-clock (not time.monotonic(), which isn't comparable to file mtimes)
+    # timestamp taken just before the run starts, so a stale .ply/.sog left
+    # in output_dir by an earlier run against the same job can't be picked
+    # up as if it were this run's result.
+    run_started_at = time.time()
     process = subprocess.Popen(
-        command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        # Windows' text=True falls back to the console codepage (cp1252 etc.)
+        # via locale.getpreferredencoding(), not UTF-8 - a tool that ever
+        # prints Unicode (tqdm bars, non-ASCII log text) can raise
+        # UnicodeDecodeError inside the reader thread below, silently killing
+        # it with no sentinel ever reaching output_queue (same bug class as
+        # the cp1252 UnicodeEncodeError that broke 360Extractor's setup script).
+        encoding="utf-8",
+        errors="replace",
+        bufsize=1,
     )
     if on_process_start is not None:
         on_process_start(process)
@@ -148,7 +243,7 @@ def run_training(
     while True:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            process.kill()
+            kill_process_tree(process)
             process.wait()
             raise LichtFeldError(
                 f"LichtFeld Studio did not finish within {timeout_seconds}s and was terminated"
@@ -177,12 +272,25 @@ def run_training(
     if returncode != 0:
         raise LichtFeldError(f"LichtFeld Studio exited with {returncode}:\n{log}")
 
-    candidates = list(output_dir.rglob("*.ply")) + list(output_dir.rglob("*.sog"))
-    if not candidates:
-        raise LichtFeldError(f"LichtFeld Studio did not produce a .ply or .sog output file:\n{log}")
-    splat_path = max(candidates, key=lambda p: p.stat().st_mtime)
+    splat_path = find_result_splat(output_dir, run_started_at, log)
 
-    return TrainingResult(splat_path=splat_path, log=log)
+    return TrainingResult(splat_path=splat_path, log=log, eval_metrics=parse_eval_metrics(output_dir))
+
+
+def find_result_splat(output_dir: Path, run_started_at: float, log: str) -> Path:
+    # Shared by run_training() above and app/cloud_training.py's cloud path,
+    # which downloads into an equivalent local output_dir over scp and then
+    # needs the exact same freshest-.ply/.sog selection logic.
+    candidates = list(output_dir.rglob("*.ply")) + list(output_dir.rglob("*.sog"))
+    # A 2s tolerance absorbs coarse filesystem mtime resolution (e.g. FAT32's
+    # 2s granularity) without reopening the door to picking up a genuinely
+    # stale file from a previous run against the same output_dir.
+    fresh_candidates = [p for p in candidates if p.stat().st_mtime >= run_started_at - 2]
+    if not fresh_candidates:
+        raise LichtFeldError(
+            f"LichtFeld Studio did not produce a .ply or .sog output file:\n{log}"
+        )
+    return max(fresh_candidates, key=lambda p: p.stat().st_mtime)
 
 
 def convert_splat(
@@ -211,7 +319,8 @@ def convert_splat(
     ]
     try:
         process = subprocess.run(
-            command, capture_output=True, text=True, check=False, timeout=timeout_seconds
+            command, capture_output=True, text=True, check=False, timeout=timeout_seconds,
+            encoding="utf-8", errors="replace",
         )
     except subprocess.TimeoutExpired as exc:
         raise LichtFeldError(

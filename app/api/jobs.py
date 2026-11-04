@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import shutil
 from typing import Literal
 
@@ -9,6 +10,8 @@ from pydantic import BaseModel
 from app.deps import get_job_store
 from app.job_store import JobStore
 from app.paths import job_dir
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -42,6 +45,8 @@ class JobStageResponse(BaseModel):
     log: str | None
     error: str | None
     progress_percent: float | None
+    settings_json: str | None
+    eval_metrics_json: str | None
 
 
 @router.post("", response_model=JobResponse)
@@ -75,7 +80,16 @@ def delete_job(job_id: str, store: JobStore = Depends(get_job_store)) -> Respons
     store.delete_job(job_id)
     directory = job_dir(job_id)
     if directory.is_dir():
-        shutil.rmtree(directory)
+        try:
+            shutil.rmtree(directory)
+        except OSError:
+            # The DB record (what the job list actually reflects) is already
+            # gone - a locked file (open download, antivirus scan, etc.) on
+            # Windows shouldn't turn "delete succeeded" into an unhandled 500
+            # for something the user can't do anything about anyway. Leaves
+            # an orphaned directory on disk rather than a stuck/half-deleted
+            # job the user can't retry.
+            logger.exception("Failed to remove job directory %s after delete (non-fatal)", directory)
     return Response(status_code=204)
 
 

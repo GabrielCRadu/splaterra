@@ -1,7 +1,40 @@
+// Single source of truth for stage-name/status Romanian labels - previously
+// duplicated separately in index.html and job.html, which let index.html's
+// copy silently drift out of sync (it was missing "training"/"export",
+// leaking the raw English stage name into an otherwise all-Romanian pill).
+const STAGE_LABELS = {
+  ingestion: "Ingestie",
+  frame_extraction: "Extragere cadre",
+  alignment: "Alignment",
+  recommendation: "Recomandare",
+  training: "Antrenare",
+  export: "Export",
+};
+
+const STATUS_LABELS = {
+  running: "in curs",
+  done: "gata",
+  failed: "esuat",
+};
+
+async function _errorMessage(response, method, path) {
+  // FastAPI's HTTPException body is {"detail": "..."} - surface that real
+  // message (e.g. "Frame extraction is already running for this job")
+  // instead of a bare status code, so a caught error is actually useful to
+  // show the user rather than just "POST ... failed: 409".
+  try {
+    const data = await response.json();
+    if (data && typeof data.detail === "string") return data.detail;
+  } catch (err) {
+    // response body wasn't JSON - fall through to the generic message
+  }
+  return `${method} ${path} failed: ${response.status}`;
+}
+
 async function apiGet(path) {
   const response = await fetch(path);
   if (!response.ok) {
-    throw new Error(`GET ${path} failed: ${response.status}`);
+    throw new Error(await _errorMessage(response, "GET", path));
   }
   return response.json();
 }
@@ -13,9 +46,34 @@ async function apiPost(path, body) {
     body: JSON.stringify(body || {}),
   });
   if (!response.ok) {
-    throw new Error(`POST ${path} failed: ${response.status}`);
+    throw new Error(await _errorMessage(response, "POST", path));
   }
   return response.json();
+}
+
+async function apiDelete(path) {
+  const response = await fetch(path, { method: "DELETE" });
+  if (!response.ok) {
+    throw new Error(await _errorMessage(response, "DELETE", path));
+  }
+}
+
+async function runAction(button, fn) {
+  // Shared by every stage-action button (extract/align/train/export/cancel/
+  // import/upload): prevents a double-tap or impatient double-click from
+  // firing the request twice before the first response/re-render lands, and
+  // surfaces a failure (e.g. the backend's 409 "already running" guard)
+  // instead of silently swallowing it - previously an unhandled rejection
+  // left the button clickable with zero feedback.
+  if (button.disabled) return;
+  button.disabled = true;
+  try {
+    await fn();
+  } catch (err) {
+    alert(err.message || String(err));
+  } finally {
+    button.disabled = false;
+  }
 }
 
 function jobIdFromQuery() {

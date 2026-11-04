@@ -52,6 +52,158 @@ def test_upsert_stage_creates_then_updates(job_store):
     assert stage.finished_at == "t1"
 
 
+def test_try_start_stage_claims_fresh_stage(job_store):
+    job = job_store.create_job("Test")
+    claimed = job_store.try_start_stage(job.id, "training", "t0")
+    assert claimed is True
+    stage = job_store.get_stage(job.id, "training")
+    assert stage.status == "running"
+    assert stage.started_at == "t0"
+
+
+def test_try_start_stage_rejects_when_already_running(job_store):
+    job = job_store.create_job("Test")
+    assert job_store.try_start_stage(job.id, "training", "t0") is True
+    assert job_store.try_start_stage(job.id, "training", "t1") is False
+    # the losing attempt must not have clobbered the winner's started_at
+    stage = job_store.get_stage(job.id, "training")
+    assert stage.started_at == "t0"
+
+
+def test_try_start_stage_succeeds_again_after_done(job_store):
+    job = job_store.create_job("Test")
+    assert job_store.try_start_stage(job.id, "training", "t0") is True
+    job_store.upsert_stage(job.id, "training", "done", finished_at="t1")
+
+    assert job_store.try_start_stage(job.id, "training", "t2") is True
+    stage = job_store.get_stage(job.id, "training")
+    assert stage.status == "running"
+    assert stage.started_at == "t2"
+    assert stage.finished_at is None
+    assert stage.error is None
+
+
+def test_try_start_stage_succeeds_again_after_failed(job_store):
+    job = job_store.create_job("Test")
+    assert job_store.try_start_stage(job.id, "training", "t0") is True
+    job_store.upsert_stage(job.id, "training", "failed", finished_at="t1", error="boom")
+
+    assert job_store.try_start_stage(job.id, "training", "t2") is True
+    stage = job_store.get_stage(job.id, "training")
+    assert stage.status == "running"
+    assert stage.error is None
+
+
+def test_try_start_stage_returns_false_for_deleted_job(job_store):
+    job = job_store.create_job("Test")
+    job_store.delete_job(job.id)
+    assert job_store.try_start_stage(job.id, "training", "t0") is False
+
+
+def test_try_start_stage_is_race_free_under_concurrent_connections(tmp_path):
+    # Empirically verified against the original race: without the atomic
+    # claim, multiple concurrent callers could all read a non-"running"
+    # status before any of them wrote "running", letting all of them win.
+    import threading
+
+    from app import db
+    from app.job_store import JobStore
+
+    db_path = tmp_path / "race.db"
+    setup_conn = db.connect(db_path)
+    job = JobStore(setup_conn).create_job("Test")
+    setup_conn.close()
+
+    results = []
+    results_lock = threading.Lock()
+
+    def worker(i):
+        conn = db.connect(db_path)
+        store = JobStore(conn)
+        won = store.try_start_stage(job.id, "training", f"start-{i}")
+        with results_lock:
+            results.append(won)
+        conn.close()
+
+    threads = [threading.Thread(target=worker, args=(i,)) for i in range(20)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert results.count(True) == 1
+
+
+def test_upsert_stage_sets_and_preserves_settings_json(job_store):
+    job = job_store.create_job("Test")
+    job_store.upsert_stage(
+        job.id, "training", "running", started_at="t0", settings_json='{"iterations": 30000}'
+    )
+    stage = job_store.get_stage(job.id, "training")
+    assert stage.settings_json == '{"iterations": 30000}'
+
+    # A progress update that doesn't pass settings_json (the normal case for
+    # every report_progress()/report_log() call during a run) must not wipe
+    # it back to NULL - same COALESCE behavior as started_at/progress_percent.
+    job_store.upsert_stage(job.id, "training", "running", progress_percent=50.0)
+    stage = job_store.get_stage(job.id, "training")
+    assert stage.settings_json == '{"iterations": 30000}'
+    assert stage.progress_percent == 50.0
+
+
+def test_upsert_stage_settings_json_defaults_to_none(job_store):
+    job = job_store.create_job("Test")
+    job_store.upsert_stage(job.id, "alignment", "running", started_at="t0")
+    stage = job_store.get_stage(job.id, "alignment")
+    assert stage.settings_json is None
+
+
+def test_upsert_stage_sets_and_preserves_eval_metrics_json(job_store):
+    job = job_store.create_job("Test")
+    job_store.upsert_stage(job.id, "training", "running", started_at="t0")
+    job_store.upsert_stage(
+        job.id, "training", "done", finished_at="t1",
+        eval_metrics_json='[{"iteration": 7000, "psnr": 24.1}]',
+    )
+    stage = job_store.get_stage(job.id, "training")
+    assert stage.eval_metrics_json == '[{"iteration": 7000, "psnr": 24.1}]'
+
+    # A later update that doesn't pass eval_metrics_json must not wipe it -
+    # same COALESCE behavior as settings_json/progress_percent.
+    job_store.upsert_stage(job.id, "training", "done", log="some log")
+    stage = job_store.get_stage(job.id, "training")
+    assert stage.eval_metrics_json == '[{"iteration": 7000, "psnr": 24.1}]'
+
+
+def test_upsert_stage_eval_metrics_json_defaults_to_none(job_store):
+    job = job_store.create_job("Test")
+    job_store.upsert_stage(job.id, "training", "running", started_at="t0")
+    stage = job_store.get_stage(job.id, "training")
+    assert stage.eval_metrics_json is None
+
+
+def test_delete_stages_removes_only_the_given_stages(job_store):
+    job = job_store.create_job("Test")
+    job_store.upsert_stage(job.id, "frame_extraction", "done")
+    job_store.upsert_stage(job.id, "alignment", "done")
+    job_store.upsert_stage(job.id, "training", "done")
+
+    job_store.delete_stages(job.id, ["alignment", "training"])
+
+    assert job_store.get_stage(job.id, "frame_extraction") is not None
+    assert job_store.get_stage(job.id, "alignment") is None
+    assert job_store.get_stage(job.id, "training") is None
+
+
+def test_delete_stages_with_empty_list_is_a_noop(job_store):
+    job = job_store.create_job("Test")
+    job_store.upsert_stage(job.id, "alignment", "done")
+
+    job_store.delete_stages(job.id, [])
+
+    assert job_store.get_stage(job.id, "alignment") is not None
+
+
 def test_update_job_sets_recommendation_json(job_store):
     job = job_store.create_job("Test")
     assert job.recommendation_json is None

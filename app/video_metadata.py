@@ -41,7 +41,9 @@ def probe_video(video_path: Path) -> VideoMetadata:
         "-show_streams",
         str(video_path),
     ]
-    process = subprocess.run(command, capture_output=True, text=True, check=False)
+    process = subprocess.run(
+        command, capture_output=True, text=True, check=False, encoding="utf-8", errors="replace"
+    )
     if process.returncode != 0:
         raise VideoMetadataError(f"ffprobe exited with {process.returncode}:\n{process.stderr}")
 

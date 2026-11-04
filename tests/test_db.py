@@ -14,7 +14,7 @@ def test_connect_creates_schema(tmp_path):
 
 
 def test_connect_migrates_old_schema_without_losing_data(tmp_path):
-    # Simulates data/splatprep.db as it existed before export_path/export_format
+    # Simulates data/splaterra.db as it existed before export_path/export_format
     # were added - connect() must add the missing columns in place rather than
     # requiring the file to be deleted, since it can hold real trained jobs.
     path = tmp_path / "old.db"
@@ -57,4 +57,79 @@ def test_connect_migrates_old_schema_without_losing_data(tmp_path):
     # export_format above where NULL is the legitimate "not done yet" value -
     # a pre-existing job must backfill to "standard", not None.
     assert row["device_type"] == "standard"
+    conn.close()
+
+
+def test_connect_migrates_job_stages_without_settings_json(tmp_path):
+    path = tmp_path / "old.db"
+    old_conn = sqlite3.connect(path)
+    old_conn.execute(
+        """
+        CREATE TABLE job_stages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id TEXT NOT NULL,
+            stage TEXT NOT NULL,
+            status TEXT NOT NULL,
+            started_at TEXT,
+            finished_at TEXT,
+            log TEXT,
+            error TEXT,
+            progress_percent REAL,
+            UNIQUE(job_id, stage)
+        )
+        """
+    )
+    old_conn.execute(
+        "INSERT INTO job_stages (job_id, stage, status) VALUES (?, ?, ?)",
+        ("job-1", "training", "done"),
+    )
+    old_conn.commit()
+    old_conn.close()
+
+    conn = db.connect(path)
+
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(job_stages)")}
+    assert "settings_json" in columns
+
+    row = conn.execute("SELECT * FROM job_stages WHERE job_id = ?", ("job-1",)).fetchone()
+    assert row["status"] == "done"
+    assert row["settings_json"] is None
+    conn.close()
+
+
+def test_connect_migrates_job_stages_without_eval_metrics_json(tmp_path):
+    path = tmp_path / "old.db"
+    old_conn = sqlite3.connect(path)
+    old_conn.execute(
+        """
+        CREATE TABLE job_stages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id TEXT NOT NULL,
+            stage TEXT NOT NULL,
+            status TEXT NOT NULL,
+            started_at TEXT,
+            finished_at TEXT,
+            log TEXT,
+            error TEXT,
+            progress_percent REAL,
+            settings_json TEXT,
+            UNIQUE(job_id, stage)
+        )
+        """
+    )
+    old_conn.execute(
+        "INSERT INTO job_stages (job_id, stage, status) VALUES (?, ?, ?)",
+        ("job-1", "training", "done"),
+    )
+    old_conn.commit()
+    old_conn.close()
+
+    conn = db.connect(path)
+
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(job_stages)")}
+    assert "eval_metrics_json" in columns
+
+    row = conn.execute("SELECT * FROM job_stages WHERE job_id = ?", ("job-1",)).fetchone()
+    assert row["status"] == "done"
+    assert row["eval_metrics_json"] is None
     conn.close()
